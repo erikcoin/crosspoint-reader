@@ -32,6 +32,7 @@
 #include "SilentRestart.h"
 #include "StatusBarSettingsActivity.h"
 #include "TextSettingsActivity.h"
+#include "activities/network/HomeAssistantActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/plugins/PluginCatalogActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
@@ -97,6 +98,7 @@ void SettingsActivity::rebuildSettingsLists() {
                             SettingInfo::Action(StrId::STR_HOME_BUTTON, SettingAction::HomeButton));
   }
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_HOME_ASSISTANT, SettingAction::HomeAssistant));
   // Clock configuration only exists where the RTC probe found hardware; on
   // clockless boards there is nothing to set.
   if (halClock.isAvailable()) {
@@ -396,6 +398,13 @@ void SettingsActivity::toggleCurrentSetting() {
         });
         break;
       }
+      case SettingAction::HomeAssistant:
+        if (auto activity = makeUniqueNoThrow<HomeAssistantActivity>(renderer, mappedInput)) {
+          startActivityForResult(std::move(activity), nullptr);
+        } else {
+          LOG_ERR("SETTINGS", "OOM: HomeAssistantActivity");
+        }
+        break;
       case SettingAction::ClearCache:
         startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
         break;

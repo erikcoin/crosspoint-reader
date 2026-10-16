@@ -20,6 +20,7 @@ enum class SettingAction {
   KOReaderSync,
   OPDSBrowser,
   Network,
+  HomeAssistant,
   ClearCache,
   CheckForUpdates,
   SdFirmwareUpdate,
