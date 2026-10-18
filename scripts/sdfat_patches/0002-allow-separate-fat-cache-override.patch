@@ -22,4 +22,6 @@ flag keep the architecture default.
 +#endif  // USE_SEPARATE_FAT_CACHE
  //------------------------------------------------------------------------------
  /**
-  * Set USE_EXFAT_BITMAP_CACHE nonzero to use a second 512 byte cache
+  * Set USE_EXFAT_BITMAP_CACHE nonzero to use a second 512 byte cach
+
+  
