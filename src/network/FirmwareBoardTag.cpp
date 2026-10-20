@@ -29,6 +29,8 @@
 #define CROSSPOINT_BOARD_NAME "lilygo"
 #elif FREEINK_DEVICE_M5
 #define CROSSPOINT_BOARD_NAME "m5"
+#elif FREEINK_DEVICE_PAPERS3
+#define CROSSPOINT_BOARD_NAME "papers3"
 #elif FREEINK_DEVICE_MURPHY
 #define CROSSPOINT_BOARD_NAME "murphy"
 #elif FREEINK_DEVICE_DELINK
@@ -45,7 +47,7 @@ namespace {
 constexpr size_t MAGIC_LEN = sizeof("CROSSPOINT-BOARD-V1:") - 1;
 }  // namespace
 
-const char TAG[] = "CROSSPOINT-BOARD-V1:" CROSSPOINT_BOARD_NAME ";";
+const char TAG[] = "CROSSPOINT-BOARD-V1:" ;//CROSSPOINT_BOARD_NAME ";";
 
 const char* boardName() { return TAG + MAGIC_LEN; }
 size_t boardNameLen() { return sizeof(TAG) - 1 - MAGIC_LEN - 1; }  // strip magic and ';'
