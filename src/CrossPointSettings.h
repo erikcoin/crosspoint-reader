@@ -371,6 +371,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Restore the saved on/off state after a normal boot or wake. Brightness and
   // warmth are always remembered even when this is disabled.
   uint8_t frontlightRestoreOnWake = 1;
+  // Home Assistant screen: after a minute idle, drop Wi-Fi and show a sleeping
+  // screen until touched.
+  uint8_t homeAssistantPowerSave = 0;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
   // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits.
