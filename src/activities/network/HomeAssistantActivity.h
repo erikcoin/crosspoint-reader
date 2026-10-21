@@ -19,10 +19,13 @@ class HomeAssistantActivity final : public CatalogActivity {
 
   void onEnter() override;
   void onExit() override;
+  void loop() override;
 
  private:
   static constexpr size_t MAX_ENTRIES = 8;
   static constexpr size_t STATE_CAP = 16;
+  // With the power-save setting on, this long without input drops Wi-Fi.
+  static constexpr unsigned long POWER_SAVE_IDLE_MS = 60000;
 
   struct Entry {
     std::string name;
@@ -35,12 +38,15 @@ class HomeAssistantActivity final : public CatalogActivity {
   // so repaints reuse it. Rows point at the entries' strings and state buffers.
   std::vector<freeink::ui::ListItem> rowItems;
   std::unique_ptr<HomeAssistantClient> client;
+  bool sleeping = false;  // Wi-Fi is off and the sleeping screen is showing
+  unsigned long lastInteractionMs = 0;
 
   int listCount() const override { return state == State::BROWSING ? static_cast<int>(entries.size()) : 0; }
   bool hasSearch() const override { return false; }
   void performSearch(const std::string&) override {}
   void downloadFinished(bool) override {}
 
+  bool handleCustomInput() override;
   void startBrowse() override;
   void activateIndex(int index) override;
   void buildScreen(UiScreen& screen) override;
@@ -52,4 +58,6 @@ class HomeAssistantActivity final : public CatalogActivity {
   void setEntryState(Entry& entry, const char* text);
   void failText(const std::string& message);
   void failFor(HomeAssistantClient::Status status);
+  void enterPowerSave();
+  void wakeFromPowerSave();
 };

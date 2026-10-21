@@ -3,14 +3,17 @@
 #include <ArduinoJson.h>
 #include <Arduino.h>
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <I18n.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <PersistableStore.h>
+#include <WiFi.h>
 
 #include <cstdio>
 
+#include "CrossPointSettings.h"
 #include "MappedInputManager.h"
 #include "components/UITheme.h"
 #include "util/HomeAssistantUtil.h"
@@ -47,9 +50,53 @@ std::string trimmed(const char* text) {
 
 void HomeAssistantActivity::onEnter() {
   CatalogActivity::onEnter();
+  sleeping = false;
+  lastInteractionMs = millis();
   state = State::CHECK_WIFI;
   statusMessage = tr(STR_CHECKING_WIFI);
   checkAndConnectWifi();
+}
+
+void HomeAssistantActivity::loop() {
+  if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.wasTouchActivity()) lastInteractionMs = millis();
+  if (!sleeping && state == State::BROWSING && SETTINGS.homeAssistantPowerSave &&
+      millis() - lastInteractionMs >= POWER_SAVE_IDLE_MS) {
+    enterPowerSave();
+  }
+  CatalogActivity::loop();
+}
+
+// Wi-Fi off and a quiet screen until the next touch. The entries keep their
+// last known states for when the list comes back.
+void HomeAssistantActivity::enterPowerSave() {
+  LOG_DBG("HA", "Power save: Wi-Fi off");
+  sleeping = true;
+  client.reset();  // stops mDNS before the radio goes away
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  requestUpdate();
+}
+
+// Same path as opening the screen: reconnect (saved network), then reload states.
+void HomeAssistantActivity::wakeFromPowerSave() {
+  LOG_DBG("HA", "Power save: waking");
+  sleeping = false;
+  lastInteractionMs = millis();
+  state = State::CHECK_WIFI;
+  statusMessage = tr(STR_CHECKING_WIFI);
+  requestUpdate(true);
+  checkAndConnectWifi();
+}
+
+bool HomeAssistantActivity::handleCustomInput() {
+  if (!sleeping) return CatalogActivity::handleCustomInput();
+  int x = 0, y = 0;
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    onBackButton();
+  } else if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) || mappedInput.wasScreenTapped(x, y)) {
+    wakeFromPowerSave();
+  }
+  return true;  // nothing else is live while sleeping
 }
 
 void HomeAssistantActivity::onExit() {
@@ -244,6 +291,11 @@ void HomeAssistantActivity::activateIndex(const int index) {
 }
 
 void HomeAssistantActivity::buildScreen(UiScreen& screen) {
+  if (sleeping) {
+    screenHeader(screen, tr(STR_SLEEPING));
+    screen.centeredText(tr(STR_TOUCH_TO_WAKE), screen.theme().bodyText);
+    return;
+  }
   screenHeader(screen, tr(STR_HOME_ASSISTANT));
   if (buildStatusScreen(screen)) return;
 
@@ -262,6 +314,11 @@ void HomeAssistantActivity::buildScreen(UiScreen& screen) {
 
 void HomeAssistantActivity::drawFooter() {
   MappedInputManager::Labels labels;
+  if (sleeping) {
+    labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+    return;
+  }
   switch (state) {
     case State::BROWSING:
       labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
