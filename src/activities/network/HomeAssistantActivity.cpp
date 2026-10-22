@@ -15,6 +15,7 @@
 
 #include "CrossPointSettings.h"
 #include "MappedInputManager.h"
+#include "activities/settings/SettingsActivity.h"
 #include "components/UITheme.h"
 #include "util/HomeAssistantUtil.h"
 
@@ -107,6 +108,14 @@ void HomeAssistantActivity::onExit() {
   std::vector<fui::ListItem>().swap(rowItems);
   std::vector<Entry>().swap(entries);
   CatalogActivity::onExit();
+}
+
+void HomeAssistantActivity::onBackButton() {
+  if (auto activity = makeUniqueNoThrow<SettingsActivity>(renderer, mappedInput)) {
+    startActivityForResult(std::move(activity), nullptr);
+  } else {
+    LOG_ERR("HA", "OOM: SettingsActivity");
+  }
 }
 
 void HomeAssistantActivity::failText(const std::string& message) {

@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 
-#include "RecentBooksStore.h"
 #include "components/UITheme.h"
 #include "components/icons/cover.h"
 #include "fontIds.h"
@@ -53,88 +52,6 @@ void RoundedRaffTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const 
     return;
   }
   BaseTheme::drawHeader(renderer, rect, title, subtitle, backButton);
-}
-
-void RoundedRaffTheme::drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
-                                           const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
-                                           bool& bufferRestored, std::function<bool()> storeCoverBuffer) const {
-  const int tileWidth = rect.width - 2 * RoundedRaffMetrics::values.contentSidePadding;
-  const int tileHeight = rect.height;
-  const int tileY = rect.y;
-  const bool hasContinueReading = !recentBooks.empty();
-  if (coverWidth == 0) {
-    coverWidth = RoundedRaffMetrics::values.homeCoverHeight * 0.6;
-  }
-  const int imgY = tileY + (tileHeight - RoundedRaffMetrics::values.homeCoverHeight) / 2;
-  const int tileX = rect.x + RoundedRaffMetrics::values.contentSidePadding;
-
-  // Draw book card regardless, fill with message based on `hasContinueReading`
-  // Draw cover image as background if available (inside the box)
-  // Only load from SD on first render, then use stored buffer
-  if (hasContinueReading) {
-    RecentBook book = recentBooks[0];
-    if (!coverRendered) {
-      std::string coverPath = book.coverBmpPath;
-      bool hasCover = true;
-      if (coverPath.empty()) {
-        hasCover = false;
-      } else {
-        const std::string coverBmpPath =
-            UITheme::getCoverThumbPath(coverPath, RoundedRaffMetrics::values.homeCoverHeight);
-
-        // First time: load cover from SD and render
-        HalFile file;
-        if (Storage.openFileForRead("HOME", coverBmpPath, file)) {
-          Bitmap bitmap(file);
-          if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-            coverWidth = bitmap.getWidth();
-            // Narrow covers come out taller than the slot; fill 1:1 and crop
-            // vertically instead of rescaling the dither.
-            drawCoverThumbFill(renderer, bitmap,
-                               Rect{tileX + (tileWidth - coverWidth) / 2, imgY, coverWidth,
-                                    RoundedRaffMetrics::values.homeCoverHeight});
-            renderer.maskRoundedRectOutsideCorners(tileX + (tileWidth - coverWidth) / 2, imgY, coverWidth,
-                                                   RoundedRaffMetrics::values.homeCoverHeight, kCoverRadius,
-                                                   Color::LightGray);
-          } else {
-            hasCover = false;
-          }
-          file.close();
-        }
-      }
-
-      // Draw either way
-      renderer.drawRoundedRect(tileX + (tileWidth - coverWidth) / 2, imgY, coverWidth,
-                               RoundedRaffMetrics::values.homeCoverHeight, 1, kCoverRadius, true);
-
-      if (!hasCover) {
-        // Render empty cover
-        renderer.fillRect(tileX + (tileWidth - coverWidth) / 2, imgY + (RoundedRaffMetrics::values.homeCoverHeight / 3),
-                          coverWidth, 2 * RoundedRaffMetrics::values.homeCoverHeight / 3, true);
-        renderer.drawIcon(CoverIcon, tileX + (tileWidth - coverWidth) / 2 + 24, imgY + 24, 32);
-        renderer.maskRoundedRectOutsideCorners(tileX + (tileWidth - coverWidth) / 2, imgY, coverWidth,
-                                               RoundedRaffMetrics::values.homeCoverHeight, kCoverRadius,
-                                               Color::LightGray);
-      }
-
-      coverBufferStored = storeCoverBuffer();
-      coverRendered = coverBufferStored;  // Only consider it rendered if we successfully stored the buffer
-    }
-
-    renderer.fillRoundedRect(tileX, tileY, tileWidth, imgY - tileY, kRowRadius, true, true, false, false,
-                             Color::LightGray);
-    renderer.fillRectDither(tileX, imgY, (tileWidth - coverWidth) / 2, RoundedRaffMetrics::values.homeCoverHeight,
-                            Color::LightGray);
-    renderer.fillRectDither(tileX + (tileWidth + coverWidth) / 2, imgY, (tileWidth - coverWidth) / 2,
-                            RoundedRaffMetrics::values.homeCoverHeight, Color::LightGray);
-    renderer.fillRoundedRect(tileX, imgY + RoundedRaffMetrics::values.homeCoverHeight, tileWidth,
-                             tileHeight - (imgY - tileY + RoundedRaffMetrics::values.homeCoverHeight), kRowRadius,
-                             false, false, true, true, Color::LightGray);
-  } else {
-    renderer.fillRoundedRect(tileX, tileY, tileWidth, tileHeight, kRowRadius, Color::LightGray);
-    renderer.drawCenteredText(kTitleFontId, rect.y + rect.height / 2 - renderer.getLineHeight(kTitleFontId) / 2,
-                              tr(STR_NO_OPEN_BOOK));
-  }
 }
 
 int RoundedRaffTheme::getMenuRowHeight(const GfxRenderer& renderer) const {

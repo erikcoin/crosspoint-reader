@@ -47,6 +47,8 @@ class HomeAssistantActivity final : public CatalogActivity {
   void downloadFinished(bool) override {}
 
   bool handleCustomInput() override;
+  // Home screen of the firmware: Back opens Settings, whose Back returns here.
+  void onBackButton() override;
   void startBrowse() override;
   void activateIndex(int index) override;
   void buildScreen(UiScreen& screen) override;

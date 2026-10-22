@@ -11,10 +11,7 @@
 #include <string>
 
 #include "I18nKeys.h"
-#include "ReaderFontSizes.h"
 #include "SettingsList.h"
-#include "fontIds.h"
-#include "util/ParagraphIndentMigration.h"
 
 namespace {
 
@@ -65,7 +62,7 @@ uint8_t CrossPointSettings::sleepTimeoutEnumToMinutes(const uint8_t legacyValue)
 void CrossPointSettings::toJson(JsonDocument& doc) const {
   const CrossPointSettings& s = *this;
 
-  for (const auto& info : getSettingsList(nullptr, nullptr, /*forPersistence=*/true)) {
+  for (const auto& info : getSettingsList(/*forPersistence=*/true)) {
     if (!info.key) continue;
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
     if (!info.valuePtr && !info.stringOffset) continue;
@@ -89,21 +86,6 @@ void CrossPointSettings::toJson(JsonDocument& doc) const {
   doc["frontButtonConfirm"] = frontButtonConfirm;
   doc["frontButtonLeft"] = frontButtonLeft;
   doc["frontButtonRight"] = frontButtonRight;
-  // Font family and size — both use dynamic getter/setters in SettingsList (the
-  // option lists depend on the SD font registry), so the generic loop skips them.
-  doc["fontFamily"] = fontFamily;
-  doc["fontSize"] = fontPointSize;
-  // SD card font family name — not in SettingsList, save manually
-  if (sdFontFamilyName[0] != '\0') {
-    doc["sdFontFamilyName"] = sdFontFamilyName;
-  }
-  // Dictionary folder name — uses dynamic getter/setter in SettingsList, save manually
-  if (dictionaryName[0] != '\0') {
-    doc["dictionaryName"] = dictionaryName;
-  }
-  // The displayed option list varies by board, so this setting uses a dynamic
-  // display-index mapping and is skipped by the generic persistence loop.
-  doc["longPressMenuFunction"] = longPressMenuFunction;
   doc["shortPwrBtn"] = shortPwrBtn;
 
   // Language -- managed by LanguageSelectActivity, not in SettingsList.
@@ -123,7 +105,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
 
   auto clamp = [](uint8_t val, uint8_t maxVal, uint8_t def) -> uint8_t { return val < maxVal ? val : def; };
 
-  for (const auto& info : getSettingsList(nullptr, nullptr, /*forPersistence=*/true)) {
+  for (const auto& info : getSettingsList(/*forPersistence=*/true)) {
     if (!info.key) continue;
     // Dynamic entries (KOReader etc.) are stored in their own files — skip.
     if (!info.valuePtr && !info.stringOffset) continue;
@@ -184,27 +166,6 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
     }
   }
 
-  const auto indentSpaces = doc["paragraphIndentSpaces"];
-  const bool hasSavedWidth = indentSpaces.is<int>();
-  const int savedWidth = hasSavedWidth ? indentSpaces.as<int>() : 0;
-  paragraphIndentSpaces = migrateParagraphIndentSpaces(hasSavedWidth, savedWidth, extraParagraphSpacing != 0);
-  if (!hasSavedWidth || savedWidth < 0 || savedWidth > 5) needsResave = true;
-
-  // Older files stored one combined touch mode under "touchReaderControls":
-  // 0=off, 1=tap, 2=swipe, 3=inverted tap. Split it into the master toggle
-  // plus the per-direction gesture pair (the generic loop above already folded
-  // out-of-range toggle values back to the On default).
-  if (doc["pageTurnGesture"].isNull() && doc["previousPageGesture"].isNull() &&
-      doc["touchReaderControls"].is<uint8_t>()) {
-    const uint8_t mode = doc["touchReaderControls"].as<uint8_t>();
-    if (mode >= 1 && mode <= 3) {
-      touchReaderControls = TOUCH_READER_ON;
-      pageTurnGesture = mode == 1 ? TAP_ONLY : mode == 2 ? SWIPE_ONLY : INVERTED_TAP;
-      previousPageGesture = pageTurnGesture;
-      needsResave = true;
-    }
-  }
-
   if (doc["sleepTimeoutMinutes"].isNull() && !doc["sleepTimeout"].isNull()) {
     const uint8_t legacyValue =
         clamp(doc["sleepTimeout"] | (uint8_t)SLEEP_10_MIN, SLEEP_TIMEOUT_COUNT, (uint8_t)SLEEP_10_MIN);
@@ -220,50 +181,7 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
       clamp(doc["frontButtonRight"] | (uint8_t)FRONT_HW_RIGHT, FRONT_BUTTON_HARDWARE_COUNT, FRONT_HW_RIGHT);
   validateFrontButtonMapping(s);
 
-  // Reader font size — an actual point size since 1.5. Files written by 1.4 and
-  // earlier hold the old SMALL/MEDIUM/LARGE/EXTRA_LARGE slot in 0..3; no font is
-  // renderable at those sizes, so the range is unambiguous and folds to the
-  // point sizes those slots used to mean. Drop this once 1.4 upgrades are done.
-  uint8_t storedFontSize = doc["fontSize"] | DEFAULT_FONT_POINT_SIZE;
-  if (storedFontSize <= LEGACY_FONT_SIZE_MAX) {
-    storedFontSize = 12 + storedFontSize * 2;  // 0,1,2,3 -> 12,14,16,18
-    needsResave = true;
-  }
-  fontPointSize = storedFontSize;
-
-  // Font family — uses dynamic getter/setter in SettingsList so the generic loop skips it.
-  const uint8_t storedFontFamily = doc["fontFamily"] | (uint8_t)0;
-  fontFamily = clamp(storedFontFamily, BUILTIN_FONT_COUNT, 0);
-  // These controls use board-specific display-index mappings and are skipped by
-  // the generic settings loop. Persisted action IDs remain stable across boards.
-  longPressMenuFunction = clamp(doc["longPressMenuFunction"] | (uint8_t)LP_MENU_DISABLED,
-                                (uint8_t)LONG_PRESS_MENU_FUNCTION_COUNT, (uint8_t)LP_MENU_DISABLED);
   shortPwrBtn = clamp(doc["shortPwrBtn"] | (uint8_t)IGNORE, (uint8_t)SHORT_PWRBTN_COUNT, (uint8_t)IGNORE);
-  if (BoardConfig::hasHomeKey() && doc["homeButtonLongPressAction"].isNull() &&
-      !doc["longPressMenuFunction"].isNull()) {
-    static constexpr HomeButtonAction LEGACY[] = {HomeButtonAction::Sync,       HomeButtonAction::Ignore,
-                                                  HomeButtonAction::Bookmark,   HomeButtonAction::Dictionary,
-                                                  HomeButtonAction::ReaderMenu, HomeButtonAction::CreateClipping};
-    if (s.longPressMenuFunction < sizeof(LEGACY) / sizeof(LEGACY[0])) {
-      s.homeButtonLongPressAction = static_cast<uint8_t>(LEGACY[s.longPressMenuFunction]);
-      needsResave = true;
-    }
-  }
-
-  // SD card font family name — not in SettingsList, load manually
-  const char* sfn = doc["sdFontFamilyName"] | "";
-  strncpy(sdFontFamilyName, sfn, sizeof(sdFontFamilyName) - 1);
-  sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
-  if (storedFontFamily == LEGACY_OPENDYSLEXIC && sdFontFamilyName[0] == '\0') {
-    fontFamily = NOTOSERIF;
-    strncpy(sdFontFamilyName, "OpenDyslexic", sizeof(sdFontFamilyName) - 1);
-    sdFontFamilyName[sizeof(sdFontFamilyName) - 1] = '\0';
-    needsResave = true;
-  } else if (storedFontFamily >= BUILTIN_FONT_COUNT) {
-    needsResave = true;
-  }
-  // Dictionary folder name — uses dynamic getter/setter in SettingsList, load manually
-  copyToField(dictionaryName, doc["dictionaryName"] | "", sizeof(dictionaryName));
   // Language -- stored as code string for stability across enum reorders.
   if (doc["language"].is<const char*>()) {
     language = static_cast<uint8_t>(I18n::languageFromCode(doc["language"].as<const char*>()));
@@ -282,90 +200,6 @@ bool CrossPointSettings::fromJson(JsonVariantConst doc) {
   LOG_DBG("CPS", "Settings loaded from file");
 
   return true;
-}
-
-CrossPointSettings::StatusBarSpec CrossPointSettings::statusBarSpec() const {
-  StatusBarSpec spec;
-  spec.showChapterPageCount = statusBarChapterPageCount != 0;
-  spec.showBookProgressPercent = statusBarBookProgressPercentage != 0;
-  spec.titleMode = statusBarTitle;
-  spec.showBattery = statusBarBattery != 0;
-  spec.showBatteryPercent = hideBatteryPercentage == HIDE_NEVER;
-  spec.clockMode = statusBarClock;
-  spec.clock12h = clockFormat == 1;
-  spec.progressBarMode = statusBarProgressBar;
-  spec.progressBarHeightPx =
-      statusBarProgressBar != HIDE_PROGRESS ? static_cast<uint8_t>((statusBarProgressBarThickness + 1) * 2) : 0;
-  spec.xtcMode = xtcStatusBarMode;
-  return spec;
-}
-
-ReaderRenderSpec CrossPointSettings::readerRenderSpec(const uint16_t viewportWidth,
-                                                      const uint16_t viewportHeight) const {
-  ReaderRenderSpec spec;
-  spec.fontId = getReaderFontId();
-  spec.lineCompression = getReaderLineCompression();
-  spec.characterSpacing = getCharacterSpacing();
-  spec.wordSpacingPercent = wordSpacing;
-  spec.extraParagraphSpacing = extraParagraphSpacing != 0;
-  spec.paragraphIndentSpaces = paragraphIndentSpaces;
-  spec.paragraphAlignment = paragraphAlignment;
-  spec.viewportWidth = viewportWidth;
-  spec.viewportHeight = viewportHeight;
-  spec.hyphenationEnabled = hyphenationEnabled != 0;
-  spec.embeddedStyle = embeddedStyle != 0;
-  spec.imageRendering = imageRendering;
-  spec.focusReadingEnabled = focusReadingEnabled != 0;
-  return spec;
-}
-
-float CrossPointSettings::getReaderLineCompression() const {
-  // SD card and vector fonts get a wider scale than the built-ins: their
-  // faces carry their own (often generous) natural line height, so the old
-  // Bookerly-tuned 1.1/1.2 steps were visually near-indistinguishable. At
-  // 12pt in portrait (~760px viewport) this scale spans ~26/24/19/15 lines
-  // per page — each step reads as a clearly different density.
-  if (sdFontFamilyName[0] != '\0') {
-    switch (lineSpacing) {
-      case TIGHT:
-        return 0.95f;
-      case NORMAL:
-      default:
-        return 1.0f;
-      case WIDE:
-        return 1.3f;
-      case EXTRA_WIDE:
-        return 1.6f;
-    }
-  }
-
-  switch (fontFamily) {
-    case NOTOSERIF:
-    default:
-      switch (lineSpacing) {
-        case TIGHT:
-          return 0.95f;
-        case NORMAL:
-        default:
-          return 1.0f;
-        case WIDE:
-          return 1.1f;
-        case EXTRA_WIDE:
-          return 1.2f;
-      }
-    case NOTOSANS:
-      switch (lineSpacing) {
-        case TIGHT:
-          return 0.90f;
-        case NORMAL:
-        default:
-          return 0.95f;
-        case WIDE:
-          return 1.0f;
-        case EXTRA_WIDE:
-          return 1.05f;
-      }
-  }
 }
 
 unsigned long CrossPointSettings::getSleepTimeoutMs() const {
@@ -392,40 +226,5 @@ int CrossPointSettings::getRefreshFrequency() const {
       // Effectively disables the periodic full refresh; the page counter
       // counts down from here and never reaches the threshold in practice.
       return std::numeric_limits<int>::max();
-  }
-}
-
-void CrossPointSettings::clearSdFontFamily() {
-  sdFontFamilyName[0] = '\0';
-  fontPointSize =
-      snapToNearestPointSize(BUILTIN_READER_POINT_SIZES, std::size(BUILTIN_READER_POINT_SIZES), fontPointSize);
-  saveToFile();
-}
-
-int CrossPointSettings::getReaderFontId() const {
-  // Check SD card font first
-  if (sdFontFamilyName[0] != '\0' && sdFontIdResolver) {
-    int id = sdFontIdResolver(sdFontResolverCtx, sdFontFamilyName, fontPointSize);
-    if (id != 0) return id;
-    // Fall through to built-in if SD font not found
-  }
-
-  // A built-in family only exists at BUILTIN_READER_POINT_SIZES, so a size
-  // carried over from an SD family may not be one of them. ensureLoaded()
-  // normally persists the snap; snap again here (without allocating — this runs
-  // in the page render loop) so rendering is correct even before it has run.
-  const uint8_t pt =
-      snapToNearestPointSize(BUILTIN_READER_POINT_SIZES, std::size(BUILTIN_READER_POINT_SIZES), fontPointSize);
-  const bool sans = (fontFamily == NOTOSANS);
-  switch (pt) {
-    case 12:
-      return sans ? NOTOSANS_12_FONT_ID : NOTOSERIF_12_FONT_ID;
-    case 16:
-      return sans ? NOTOSANS_16_FONT_ID : NOTOSERIF_16_FONT_ID;
-    case 18:
-      return sans ? NOTOSANS_18_FONT_ID : NOTOSERIF_18_FONT_ID;
-    case 14:
-    default:
-      return sans ? NOTOSANS_14_FONT_ID : NOTOSERIF_14_FONT_ID;
   }
 }

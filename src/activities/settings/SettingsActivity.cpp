@@ -4,7 +4,6 @@
 #include <GfxRenderer.h>
 #include <HalClock.h>
 #include <HalDisplay.h>
-#include <LibraryBuilder.h>
 #include <Logging.h>
 #include <Memory.h>
 #include <WiFi.h>
@@ -15,26 +14,17 @@
 
 #include "AboutActivity.h"
 #include "ButtonRemapActivity.h"
-#include "ClearCacheActivity.h"
 #include "ClockSettingsActivity.h"
 #include "CrossPointSettings.h"
-#include "FontDownloadActivity.h"
 #include "HomeButtonSettingsActivity.h"
-#include "KOReaderSettingsActivity.h"
 #include "KeyboardLayoutsActivity.h"
 #include "LanguageSelectActivity.h"
 #include "MappedInputManager.h"
-#include "OpdsServerListActivity.h"
 #include "OtaUpdateActivity.h"
-#include "SdCardFontSystem.h"
-#include "SdFirmwareUpdateActivity.h"
 #include "SettingsList.h"
 #include "SilentRestart.h"
-#include "StatusBarSettingsActivity.h"
-#include "TextSettingsActivity.h"
 #include "activities/network/HomeAssistantActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
-#include "activities/plugins/PluginCatalogActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
@@ -48,20 +38,10 @@ SettingsActivity::SettingsActivity(GfxRenderer& renderer, MappedInputManager& ma
 
 void SettingsActivity::rebuildSettingsLists() {
   displaySettings.clear();
-  readerSettings.clear();
   controlsSettings.clear();
   systemSettings.clear();
 
-  // Pick up any fonts uploaded/deleted over the web server since the last
-  // reader activity ran — otherwise the font-family picker shows stale list.
-  sdFontSystem.refreshIfDirty();
-
-  // Rescan /dictionaries on every rebuild: cheap (one directory listing) and
-  // picks up dictionaries copied to the SD card since the last visit.
-  std::vector<DictionaryEntry> dictionaries;
-  DictionaryRegistry::discover(dictionaries);
-
-  for (const auto& setting : getSettingsList(&sdFontSystem.registry(), &dictionaries)) {
+  for (const auto& setting : getSettingsList()) {
     if (setting.category == StrId::STR_NONE_OPT || home_button::isSetting(setting.valuePtr)) continue;
     if (setting.category == StrId::STR_CAT_DISPLAY) {
       // The sunlight fading fix is a grayscale-waveform compensation that does
@@ -71,17 +51,7 @@ void SettingsActivity::rebuildSettingsLists() {
         continue;
       }
       displaySettings.push_back(setting);
-    } else if (setting.category == StrId::STR_CAT_READER) {
-      // Settings merged into "Text Settings"
-      // (they stay in the shared list for the web settings API)
-      if (setting.inTextSettings) continue;
-      readerSettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_CONTROLS) {
-      if (BoardConfig::hasHomeKey() && setting.valuePtr == &CrossPointSettings::longPressMenuFunction) continue;
-      if (setting.valuePtr == &CrossPointSettings::pwrBtnFootnoteBack &&
-          SETTINGS.shortPwrBtn != CrossPointSettings::SHORT_PWRBTN::FOOTNOTES) {
-        continue;
-      }
       controlsSettings.push_back(setting);
     } else if (setting.category == StrId::STR_CAT_SYSTEM) {
       systemSettings.push_back(setting);
@@ -104,22 +74,12 @@ void SettingsActivity::rebuildSettingsLists() {
   if (halClock.isAvailable()) {
     systemSettings.push_back(SettingInfo::Action(StrId::STR_CLOCK, SettingAction::ClockSettings));
   }
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_CLEAR_READING_CACHE, SettingAction::ClearCache));
   // OTA fetches this board's own release asset (see OtaUpdater); boards whose
   // asset isn't published yet just report no update available.
   systemSettings.push_back(SettingInfo::Action(StrId::STR_CHECK_UPDATES, SettingAction::CheckForUpdates));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_SD_FIRMWARE_UPDATE, SettingAction::SdFirmwareUpdate));
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_PLUGINS, SettingAction::Plugins));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KEYBOARD_LAYOUTS, SettingAction::KeyboardLayouts));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_ABOUT, SettingAction::About));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_LANGUAGE, SettingAction::Language));
-  readerSettings.insert(readerSettings.begin(),
-                        SettingInfo::Action(StrId::STR_TEXT_SETTINGS, SettingAction::TextSettings));
-  readerSettings.insert(readerSettings.begin() + 1,
-                        SettingInfo::Action(StrId::STR_MANAGE_FONTS, SettingAction::DownloadFonts));
-  readerSettings.push_back(SettingInfo::Action(StrId::STR_CUSTOMISE_STATUS_BAR, SettingAction::CustomiseStatusBar));
 
   // Update currentSettings pointer and count for the active category
   switch (selectedCategoryIndex) {
@@ -127,12 +87,9 @@ void SettingsActivity::rebuildSettingsLists() {
       currentSettings = &displaySettings;
       break;
     case 1:
-      currentSettings = &readerSettings;
-      break;
-    case 2:
       currentSettings = &controlsSettings;
       break;
-    case 3:
+    case 2:
       currentSettings = &systemSettings;
       break;
   }
@@ -161,12 +118,9 @@ void SettingsActivity::selectCategory(const int categoryIndex) {
       currentSettings = &displaySettings;
       break;
     case 1:
-      currentSettings = &readerSettings;
-      break;
-    case 2:
       currentSettings = &controlsSettings;
       break;
-    case 3:
+    case 2:
       currentSettings = &systemSettings;
       break;
   }
@@ -267,7 +221,8 @@ bool SettingsActivity::handleButtons() {
       requestUpdate();
     } else {
       SETTINGS.saveToFile();
-      onGoHome();
+      finish();  // back to the Home Assistant screen
+
     }
     return true;
   }
@@ -360,21 +315,12 @@ void SettingsActivity::toggleCurrentSetting() {
       case SettingAction::RemapFrontButtons:
         startActivityForResult(std::make_unique<ButtonRemapActivity>(renderer, mappedInput), resultHandler);
         break;
-      case SettingAction::CustomiseStatusBar:
-        startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput), resultHandler);
-        break;
       case SettingAction::ClockSettings:
         if (auto activity = makeUniqueNoThrow<ClockSettingsActivity>(renderer, mappedInput)) {
           startActivityForResult(std::move(activity), resultHandler);
         } else {
           LOG_ERR("SETTINGS", "OOM: ClockSettingsActivity");
         }
-        break;
-      case SettingAction::KOReaderSync:
-        startActivityForResult(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput), resultHandler);
-        break;
-      case SettingAction::OPDSBrowser:
-        startActivityForResult(std::make_unique<OpdsServerListActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::Network: {
         auto activity = makeUniqueNoThrow<WifiSelectionActivity>(renderer, mappedInput, false);
@@ -405,29 +351,8 @@ void SettingsActivity::toggleCurrentSetting() {
           LOG_ERR("SETTINGS", "OOM: HomeAssistantActivity");
         }
         break;
-      case SettingAction::ClearCache:
-        startActivityForResult(std::make_unique<ClearCacheActivity>(renderer, mappedInput), resultHandler);
-        break;
       case SettingAction::CheckForUpdates:
         startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
-        break;
-      case SettingAction::SdFirmwareUpdate:
-        startActivityForResult(std::make_unique<SdFirmwareUpdateActivity>(renderer, mappedInput), resultHandler);
-        break;
-      case SettingAction::DownloadFonts:
-        startActivityForResult(std::make_unique<FontDownloadActivity>(renderer, mappedInput),
-                               [this](const ActivityResult&) {
-                                 SETTINGS.saveToFile();
-                                 rebuildSettingsLists();
-                               });
-        break;
-      case SettingAction::TextSettings:
-        startActivityForResult(std::make_unique<TextSettingsActivity>(renderer, mappedInput, &sdFontSystem.registry(),
-                                                                      TextSettingsActivity::Tab::Family),
-                               [this](const ActivityResult&) {
-                                 // TextSettingsActivity saves on each change; no save needed here.
-                                 rebuildSettingsLists();
-                               });
         break;
       case SettingAction::Language:
         // Row labels are translated once in rebuildRowItems() and don't
@@ -438,9 +363,6 @@ void SettingsActivity::toggleCurrentSetting() {
                                  SETTINGS.saveToFile();
                                  rebuildSettingsLists();
                                });
-        break;
-      case SettingAction::Plugins:
-        startActivityForResult(std::make_unique<PluginCatalogActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::KeyboardLayouts:
         if (auto activity = makeUniqueNoThrow<KeyboardLayoutsActivity>(renderer, mappedInput)) {

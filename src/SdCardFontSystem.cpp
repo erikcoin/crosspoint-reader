@@ -10,7 +10,6 @@
 #include <iterator>
 
 #include "CrossPointSettings.h"
-#include "ReaderFontSizes.h"
 #include "fontIds.h"
 
 namespace {

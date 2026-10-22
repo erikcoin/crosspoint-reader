@@ -8,7 +8,6 @@
 
 class Bitmap;
 class GfxRenderer;
-struct RecentBook;
 namespace freeink {
 namespace ui {
 struct HeaderProps;
@@ -236,10 +235,6 @@ class BaseTheme {
   // Component drawing methods
   static freeink::ui::BitmapRef checkboxIcon(bool checked);
   static void setCheckboxRow(freeink::ui::ListItem& item, bool checked);
-  static void drawCoverPlaceholder(const GfxRenderer& renderer, Rect rect);
-  // Draws a pre-dithered cover thumb 1:1, centered and clipped to fill the
-  // slot. Rescaling a dithered bitmap aliases badly, so overflow is cropped.
-  static bool drawCoverThumbFill(const GfxRenderer& renderer, const Bitmap& bitmap, Rect slot, int xOffset = 0);
   static void drawProgressBar(const GfxRenderer& renderer, Rect rect, size_t current, size_t total);
   void drawBatteryLeft(const GfxRenderer& renderer, Rect rect,
                        bool showPercentage = true) const;  // Left aligned (reader mode)
@@ -281,27 +276,15 @@ class BaseTheme {
   static int headerStatusInset();
   virtual void drawSubHeader(const GfxRenderer& renderer, Rect rect, const char* label,
                              const char* rightLabel = nullptr) const;
-  virtual void drawRecentBookCover(GfxRenderer& renderer, Rect rect, const std::vector<RecentBook>& recentBooks,
-                                   const int selectorIndex, bool& coverRendered, bool& coverBufferStored,
-                                   bool& bufferRestored, std::function<bool()> storeCoverBuffer) const;
   virtual void drawButtonMenu(GfxRenderer& renderer, Rect rect, int buttonCount, int selectedIndex,
                               const std::function<std::string(int index)>& buttonLabel,
                               const std::function<UIIcon(int index)>& rowIcon) const;
-  static void drawSelectionHandle(const GfxRenderer& renderer, Rect rect, bool left);
-  static void drawSelectionActions(const GfxRenderer& renderer, Rect rect);
   virtual Rect drawPopup(const GfxRenderer& renderer, const char* message) const;
   virtual void fillPopupProgress(const GfxRenderer& renderer, const Rect& layout, const int progress) const;
-  static void drawStatusBar(GfxRenderer& renderer, const float bookProgress, const int currentPage, const int pageCount,
-                            std::string title, const int paddingBottom = 0, const int textYOffset = 0,
-                            const bool fillMargin = true, const bool isPageBookmarked = false,
-                            const bool pageCountEstimated = false);
   static void drawHelpText(const GfxRenderer& renderer, Rect rect, const char* label);
   virtual void drawTextField(const GfxRenderer& renderer, Rect rect, const int textWidth, bool cursorMode = false,
                              int contentStartX = 0, int contentWidth = 0) const;
   virtual bool showsFileIcons() const { return false; }
-  // Thumb generation height for home covers; 0 means use metrics.homeCoverHeight.
-  // Themes with slots wider than 0.6 aspect override this so covers still fill.
-  virtual int homeCoverThumbHeight(const GfxRenderer&) const { return 0; }
 
   // Shared constants and helpers for battery drawing (used by all themes)
   static constexpr int batteryPercentSpacing = 4;

@@ -15,19 +15,11 @@ enum class SettingType { TOGGLE, ENUM, ACTION, VALUE, STRING };
 enum class SettingAction {
   None,
   RemapFrontButtons,
-  CustomiseStatusBar,
   ClockSettings,
-  KOReaderSync,
-  OPDSBrowser,
   Network,
   HomeAssistant,
-  ClearCache,
   CheckForUpdates,
-  SdFirmwareUpdate,
   Language,
-  DownloadFonts,
-  TextSettings,
-  Plugins,
   KeyboardLayouts,
   HomeButton,
   About,
@@ -179,7 +171,6 @@ class SettingsActivity final : public UiTabListActivity {
 
   // Per-category settings derived from shared list + device-only actions
   std::vector<SettingInfo> displaySettings;
-  std::vector<SettingInfo> readerSettings;
   std::vector<SettingInfo> controlsSettings;
   std::vector<SettingInfo> systemSettings;
   const std::vector<SettingInfo>* currentSettings = nullptr;
@@ -199,9 +190,9 @@ class SettingsActivity final : public UiTabListActivity {
   std::vector<freeink::ui::ListItem> rowItems_;
   void rebuildRowItems();
 
-  static constexpr int categoryCount = 4;
-  static constexpr StrId categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_READER,
-                                                         StrId::STR_CAT_CONTROLS, StrId::STR_CAT_SYSTEM};
+  static constexpr int categoryCount = 3;
+  static constexpr StrId categoryNames[categoryCount] = {StrId::STR_CAT_DISPLAY, StrId::STR_CAT_CONTROLS,
+                                                         StrId::STR_CAT_SYSTEM};
 
   // --- UiTabListActivity contract ---
   int listCount() const override { return settingsCount; }

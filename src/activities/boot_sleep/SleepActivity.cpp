@@ -1,8 +1,6 @@
 #include "SleepActivity.h"
 
 #include <BitmapHelpers.h>
-#include <Epub.h>
-#include <Epub/converters/PngToFramebufferConverter.h>
 #include <FontCacheManager.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
@@ -12,7 +10,7 @@
 #include <I18n.h>
 #include <Memory.h>
 #include <PNGdec.h>
-#include <Xtc.h>
+#include <PngToFramebufferConverter.h>
 
 #include <algorithm>
 #include <cmath>
@@ -23,7 +21,6 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
-#include "activities/reader/ReaderUtils.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
 #include "images/Logo120.h"
@@ -546,39 +543,18 @@ void SleepActivity::onEnter() {
     // output-level inversion first so the retained content keeps its visible
     // polarity after the display driver returns to normal.
     if (frameWasInverted) renderer.invertScreen();
-    if (APP_STATE.lastSleepFromReader) {
-      ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
-    }
     drawSleepPopupPreservingFrame(renderer);
-    if (APP_STATE.lastSleepFromReader) {
-      renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-    }
     releaseSdFontCachesForDecode(renderer);
     return renderTransparentCustomSleepScreen();
   }
 
-  // Show popup with reader orientation only when going to sleep from reader
-  if (APP_STATE.lastSleepFromReader) {
-    ReaderUtils::applyOrientation(renderer, SETTINGS.orientation);
-    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-    renderer.setOrientation(GfxRenderer::Orientation::Portrait);
-  } else {
-    GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
-  }
+  GUI.drawPopup(renderer, tr(STR_ENTERING_SLEEP));
 
   switch (SETTINGS.sleepScreen) {
     case (CrossPointSettings::SLEEP_SCREEN_MODE::BLANK):
       return renderBlankSleepScreen();
     case (CrossPointSettings::SLEEP_SCREEN_MODE::CUSTOM):
       return renderCustomSleepScreen();
-    case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER):
-      return renderCoverSleepScreen();
-    case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
-      if (APP_STATE.lastSleepFromReader) {
-        return renderCoverSleepScreen();
-      } else {
-        return renderCustomSleepScreen();
-      }
     default:
       return renderDefaultSleepScreen();
   }
@@ -807,76 +783,6 @@ void SleepActivity::renderTransparentCustomSleepScreen() const {
 
   LOG_ERR("SLP", "No valid transparent sleep overlay found");
   renderDefaultSleepScreen();
-}
-
-void SleepActivity::renderCoverSleepScreen() const {
-  void (SleepActivity::*renderNoCoverSleepScreen)() const;
-  switch (SETTINGS.sleepScreen) {
-    case (CrossPointSettings::SLEEP_SCREEN_MODE::COVER_CUSTOM):
-      renderNoCoverSleepScreen = &SleepActivity::renderCustomSleepScreen;
-      break;
-    default:
-      renderNoCoverSleepScreen = &SleepActivity::renderDefaultSleepScreen;
-      break;
-  }
-
-  if (APP_STATE.openEpubPath.empty()) {
-    return (this->*renderNoCoverSleepScreen)();
-  }
-
-  // SSD absolute images use the new thresholds; other panels retain legacy tuning.
-  const bool originalThresholds =
-      renderer.grayscaleCapabilities(sleepGrayscaleMode(renderer)).supported() &&
-      display.getController() == HalDisplay::Controller::SSD1677 &&
-      SETTINGS.sleepScreenCoverFilter == CrossPointSettings::SLEEP_SCREEN_COVER_FILTER::NO_FILTER;
-  std::string coverBmpPath;
-  bool cropped = SETTINGS.sleepScreenCoverMode == CrossPointSettings::SLEEP_SCREEN_COVER_MODE::CROP;
-
-  // Check if the current book is XTC, TXT, or EPUB
-  if (FsHelpers::hasXtcExtension(APP_STATE.openEpubPath)) {
-    // Handle XTC file
-    Xtc lastXtc(APP_STATE.openEpubPath, "/.crosspoint");
-    if (!lastXtc.load()) {
-      LOG_ERR("SLP", "Failed to load last XTC");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    if (!lastXtc.generateCoverBmp()) {
-      LOG_ERR("SLP", "Failed to generate XTC cover bmp");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    coverBmpPath = lastXtc.getCoverBmpPath();
-  } else if (FsHelpers::hasReflowableBookExtension(APP_STATE.openEpubPath)) {
-    // Handle EPUB, TXT, or Markdown file
-    Epub lastEpub(APP_STATE.openEpubPath, "/.crosspoint");
-    // Skip loading css since we only need metadata here
-    if (!lastEpub.load(true, true)) {
-      LOG_ERR("SLP", "Failed to load last book");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    if (!lastEpub.generateCoverBmp(cropped, originalThresholds)) {
-      LOG_ERR("SLP", "Failed to generate cover bmp");
-      return (this->*renderNoCoverSleepScreen)();
-    }
-
-    coverBmpPath = lastEpub.getCoverBmpPath(cropped, originalThresholds);
-  } else {
-    return (this->*renderNoCoverSleepScreen)();
-  }
-
-  HalFile file;
-  if (Storage.openFileForRead("SLP", coverBmpPath, file)) {
-    Bitmap bitmap(file);
-    if (bitmap.parseHeaders() == BmpReaderError::Ok) {
-      LOG_DBG("SLP", "Rendering sleep cover: %s", coverBmpPath.c_str());
-      renderBitmapSleepScreen(bitmap);
-      return;
-    }
-  }
-
-  return (this->*renderNoCoverSleepScreen)();
 }
 
 void SleepActivity::renderLastScreenSleepScreen() const {

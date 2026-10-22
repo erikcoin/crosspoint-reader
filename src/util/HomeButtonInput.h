@@ -6,16 +6,9 @@
 enum class HomeButtonAction : uint8_t {
   Home,
   Ignore,
-  NextPage,
   Refresh,
-  Footnotes,
   Confirm,
-  Sync,
-  Bookmark,
-  Dictionary,
-  ReaderMenu,
   ToggleFrontlight,
-  CreateClipping,
   Count
 };
 

@@ -17,8 +17,6 @@
 class Activity;    // forward declaration
 class RenderLock;  // forward declaration
 
-enum class HomeMenuItem { NONE, FILE_BROWSER, LIBRARY, OPDS_BROWSER, FILE_TRANSFER, SETTINGS_MENU };
-
 /**
  * ActivityManager
  *
@@ -81,20 +79,13 @@ class ActivityManager {
   void replaceActivity(std::unique_ptr<Activity>&& newActivity);
 
   // goTo... functions are convenient wrapper for replaceActivity()
-  void goToFileTransfer();
-  void goToJoinNetwork();  // File Transfer straight into Join Network (post heap-defrag reboot)
   void goToUsbDrive();
   void goToSettings();
-  void goToFileBrowser(std::string path = {});
-  void goToLibrary();
-  void goToBrowser();
-  void goToPlugins(bool showOpds);
-  void goToReader(std::string path, bool allowFastInitialRefresh = false);
   void goToSleep(bool fromTimeout = false);
   void goToBoot();
   void goToFullScreenMessage(std::string message, EpdFontFamily::Style style = EpdFontFamily::REGULAR);
   void goToCrashReport();
-  void goHome(HomeMenuItem initialMenuItem = HomeMenuItem::NONE, bool cleanInitialRefresh = false);
+  void goHome();
 
   // This will move current activity to stack instead of deleting it
   void pushActivity(std::unique_ptr<Activity>&& activity);
