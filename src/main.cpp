@@ -418,6 +418,55 @@ void setup() {
   const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
   const bool isPersistedSleepWake = isSleepWake && !APP_STATE.showBootScreen;
 
+  SETTINGS.loadFromFile();
+  // Push the saved timezone's POSIX rule into the clock (migrating the legacy
+  // UTC-offset setting on first boot after the update).
+  timezones::applyToClock();
+  I18N.setLanguage(static_cast<Language>(SETTINGS.language));
+  UITheme::getInstance().reload();
+  ButtonNavigator::setMappedInputManager(mappedInputManager);
+  // Restore the monotonic clock floor before anything reads time().
+  trustedtime::init();
+
+  // Brightness and warmth are always restored. A normal wake starts with the
+  // light off unless Restore Light on Wake is enabled; silent maintenance
+  // reboots replay the live state captured at restart, so they neither go dark
+  // nor light up against the user's wake preference.
+  const bool restoreLightOn =
+      isSilentReboot ? silentRebootLightOn : (SETTINGS.frontlightOn != 0 && SETTINGS.frontlightRestoreOnWake != 0);
+  Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
+
+  switch (wakeupReason) {
+    case HalGPIO::WakeupReason::PowerButton:
+      // With Short Power Button Press = Sleep, a single click wakes on any
+      // device; otherwise the button must still be held (ghost-wake debounce).
+      if (!wakeHoldVerified && SETTINGS.shortPwrBtn != CrossPointSettings::SHORT_PWRBTN::SLEEP) {
+        LOG_DBG("MAIN", "Power-button wake not held through verification, sleeping");
+        Storage.prepareForDeepSleep();
+        powerManager.startDeepSleep(gpio);
+      }
+      wakePowerReleasePending = true;
+      break;
+    case HalGPIO::WakeupReason::AfterUSBPower:
+      // Most devices return to sleep after a USB-powered cold boot.
+      LOG_DBG("MAIN", "Wakeup reason: After USB Power");
+#if FREEINK_DEVICE_X4PRO || FREEINK_DEVICE_X4CLASSIC || FREEINK_DEVICE_PAPERMONO || FREEINK_DEVICE_EEGO_A4 || \
+    FREEINK_DEVICE_METALIO_EINK4
+      // These boards must stay awake so native USB remains available after a
+      // USB-powered boot; sleeping would strand them in a replug boot loop.
+      break;
+#else
+      Storage.prepareForDeepSleep();
+      powerManager.startDeepSleep(gpio);
+      break;
+#endif
+    case HalGPIO::WakeupReason::AfterFlash:
+      // After flashing, just proceed to boot
+    case HalGPIO::WakeupReason::Other:
+    default:
+      break;
+  }
+
   LOG_DBG("MAIN", "Starting CrossPoint version " CROSSPOINT_VERSION);
 
   // Resolve the single boot-presentation decision. Skipping the splash also
@@ -599,6 +648,13 @@ void loop() {
   // Consume the second X4 Pro power-button release so it does not also run a
   // configured short-power action after toggling the frontlight.
   if (handleX4ProFrontlightDoubleClick()) {
+    return;
+  }
+
+  // Optional shortcut: the Right front button toggles the frontlight. The press
+  // is consumed so the screen underneath does not also move its selection.
+  if (SETTINGS.rightButtonLight && Frontlight.present() && gpio.wasPressed(HalGPIO::BTN_RIGHT)) {
+    toggleFrontlight();
     return;
   }
 
