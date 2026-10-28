@@ -113,6 +113,8 @@ inline std::vector<SettingInfo> getSettingsList(bool forPersistence = false) {
         // Erased below unless the board is an X4 Pro.
         SettingInfo::Toggle(StrId::STR_DBL_CLICK_PWR_LIGHT, &CrossPointSettings::doubleClickPwrLight,
                             "doubleClickPwrLight", StrId::STR_CAT_CONTROLS),
+        SettingInfo::Toggle(StrId::STR_RIGHT_BTN_LIGHT, &CrossPointSettings::rightButtonLight, "rightButtonLight",
+                            StrId::STR_CAT_CONTROLS),
         buildShortPowerButtonSetting(),
 
         // --- System ---
@@ -181,7 +183,9 @@ inline std::vector<SettingInfo> getSettingsList(bool forPersistence = false) {
   // has not run at load time, so persistence must keep the key (forPersistence).
   if (!forPersistence && !Frontlight.present()) {
     v.erase(std::remove_if(v.begin(), v.end(),
-                           [](const SettingInfo& s) { return s.nameId == StrId::STR_RESTORE_LIGHT_ON_WAKE; }),
+                           [](const SettingInfo& s) {
+                             return s.nameId == StrId::STR_RESTORE_LIGHT_ON_WAKE || s.nameId == StrId::STR_RIGHT_BTN_LIGHT;
+                           }),
             v.end());
   }
   return v;
