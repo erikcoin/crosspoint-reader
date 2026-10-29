@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+#include "network/BleButtonBeacon.h"  // CROSSPOINT_HA_BLE
 #include "util/HomeButtonInput.h"
 
 class CrossPointSettings : public PersistableStore<CrossPointSettings> {
@@ -193,6 +194,10 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Home Assistant screen: after a minute idle, drop Wi-Fi and show a sleeping
   // screen until touched.
   uint8_t homeAssistantPowerSave = 0;
+  // How the Home Assistant screen reaches Home Assistant. Bluetooth sends BTHome
+  // button events (no Wi-Fi, no token); builds without Bluetooth use Wi-Fi.
+  enum HA_LINK { HA_LINK_WIFI = 0, HA_LINK_BLE = 1, HA_LINK_COUNT };
+  uint8_t homeAssistantLink = CROSSPOINT_HA_BLE ? HA_LINK_BLE : HA_LINK_WIFI;
   // Language setting (Language enum index, default 0 = EN)
   uint8_t language = 0;
   // Keyboard layouts the user can reach, using keyboard_layouts::ALL table bits.

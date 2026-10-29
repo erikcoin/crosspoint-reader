@@ -47,3 +47,54 @@ and open the screen again.
   connection, error/retry and teardown match the OPDS browser).
 - `src/network/HomeAssistantClient.*`: the REST calls and mDNS lookup.
 - `src/util/HomeAssistantUtil.h`: pure helpers, covered by `test/home_assistant_util`.
+
+## Bluetooth link (no Wi-Fi)
+
+Settings → System → **Home Assistant Link** chooses how the screen talks to
+Home Assistant: **Wi-Fi** (above) or **Bluetooth**. Bluetooth saves battery
+because nothing connects: a tap broadcasts a short BLE message and Home
+Assistant acts on it.
+
+- It is **send-only**. The rows show "Sent", not the real On/Off state, and the
+  url and token are not used. Only the first 4 `entities` are used, in order:
+  row 1 is Button 1 in Home Assistant, row 2 is Button 2, and so on.
+- The message is a BTHome v2 button event (unencrypted), so anyone in radio range
+  who knows the format could send the same event. Keep that in mind before
+  using it for anything sensitive.
+- Needs a firmware built with Bluetooth: the `x4pro` env has it
+  (`-DCROSSPOINT_HA_BLE=1` plus the `NimBLE-Arduino` library). For another
+  ESP32-S3 env, add the same flag and `h2zero/NimBLE-Arduino@^2.3.8` to its
+  `lib_deps`. Builds without it show an error and need the Wi-Fi link.
+
+### Home Assistant setup
+
+1. Home Assistant needs a Bluetooth adapter, or an
+   [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
+   near the reader.
+2. Open the screen on the reader and tap a row once. Home Assistant should
+   offer a new **BTHome** device named "CrossPoint": accept it (no bind key).
+3. The device gets four event entities, Button 1 to Button 4. Create one
+   automation per button, for example:
+
+```yaml
+automation:
+  - alias: Reader button 1 - bibliotheeklamp
+    triggers:
+      - trigger: state
+        entity_id: event.crosspoint_button_1
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
+    actions:
+      - action: light.toggle
+        target:
+          entity_id: light.bibliotheeklamp
+```
+
+   Use `media_player.toggle` with `media_player.jbl_bar_9_1_3818` for the
+   soundbar. The exact entity ids depend on how Home Assistant names the device.
+
+### Code
+
+- `src/network/BleButtonBeacon.*`: the BLE sender (NimBLE, advertising only).
+- `src/util/BthomeUtil.h`: builds the message bytes; covered by `test/bthome_util`.

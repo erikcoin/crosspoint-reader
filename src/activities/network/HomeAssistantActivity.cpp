@@ -17,6 +17,7 @@
 #include "MappedInputManager.h"
 #include "activities/settings/SettingsActivity.h"
 #include "components/UITheme.h"
+#include "util/BthomeUtil.h"
 #include "util/HomeAssistantUtil.h"
 
 namespace fui = freeink::ui;
@@ -53,6 +54,11 @@ void HomeAssistantActivity::onEnter() {
   CatalogActivity::onEnter();
   sleeping = false;
   lastInteractionMs = millis();
+  bleMode = SETTINGS.homeAssistantLink == CrossPointSettings::HA_LINK_BLE;
+  if (bleMode) {
+    startBle();
+    return;
+  }
   state = State::CHECK_WIFI;
   statusMessage = tr(STR_CHECKING_WIFI);
   checkAndConnectWifi();
@@ -60,11 +66,65 @@ void HomeAssistantActivity::onEnter() {
 
 void HomeAssistantActivity::loop() {
   if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.wasTouchActivity()) lastInteractionMs = millis();
-  if (!sleeping && state == State::BROWSING && SETTINGS.homeAssistantPowerSave &&
+  if (!bleMode && !sleeping && state == State::BROWSING && SETTINGS.homeAssistantPowerSave &&
       millis() - lastInteractionMs >= POWER_SAVE_IDLE_MS) {
     enterPowerSave();
   }
   CatalogActivity::loop();
+}
+
+// Bluetooth link: nothing to connect. Only the row names matter, so a missing or
+// partial config file still gives a working list.
+void HomeAssistantActivity::loadBleEntities() {
+  std::vector<Entry> loaded;
+  JsonDocument doc;
+  if (Storage.exists(CONFIG_PATH) && PersistableStoreBase::readDocFromFile(CONFIG_PATH, doc)) {
+    const JsonVariantConst root = doc.as<JsonVariantConst>();
+    for (JsonObjectConst obj : root["entities"].as<JsonArrayConst>()) {
+      if (loaded.size() >= bthome::MAX_BUTTONS) break;
+      Entry entry;
+      entry.entityId = trimmed(obj["entity_id"] | "");
+      if (!haUtil::isValidEntityId(entry.entityId)) continue;
+      entry.name = trimmed(obj["name"] | "");
+      if (entry.name.empty()) entry.name = entry.entityId;
+      loaded.push_back(std::move(entry));
+    }
+  }
+  if (loaded.empty()) {
+    for (const auto& e : DEFAULT_ENTITIES) {
+      if (loaded.size() >= bthome::MAX_BUTTONS) break;
+      Entry entry;
+      entry.name = e.name;
+      entry.entityId = e.entityId;
+      loaded.push_back(std::move(entry));
+    }
+  }
+  closeRouting();
+  RenderLock lock(*this);
+  entries = std::move(loaded);
+  rebuildRowItems();
+}
+
+void HomeAssistantActivity::startBle() {
+  nav.reset();
+  beginLoading();
+  beacon.reset();
+  loadBleEntities();
+
+  beacon = makeUniqueNoThrow<BleButtonBeacon>();
+  if (!beacon) {
+    LOG_ERR("HA", "OOM: beacon");
+    fail(StrId::STR_MEMORY_ERROR);
+    return;
+  }
+  if (!beacon->begin()) {
+    beacon.reset();
+    failText(CROSSPOINT_HA_BLE ? "Bluetooth did not start"
+                               : "This firmware has no Bluetooth. Set Home Assistant Link to Wi-Fi");
+    return;
+  }
+  state = State::BROWSING;
+  requestUpdate();
 }
 
 // Wi-Fi off and a quiet screen until the next touch. The entries keep their
@@ -90,8 +150,17 @@ void HomeAssistantActivity::wakeFromPowerSave() {
 }
 
 bool HomeAssistantActivity::handleCustomInput() {
-  if (!sleeping) return CatalogActivity::handleCustomInput();
   int x = 0, y = 0;
+  if (bleMode && state == State::ERROR) {
+    // The base class retries over Wi-Fi; here a retry just starts Bluetooth again.
+    if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+      onBackButton();
+    } else if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) || mappedInput.wasScreenTapped(x, y)) {
+      startBle();
+    }
+    return true;
+  }
+  if (!sleeping) return CatalogActivity::handleCustomInput();
   if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
     onBackButton();
   } else if (mappedInput.wasReleased(MappedInputManager::Button::Confirm) || mappedInput.wasScreenTapped(x, y)) {
@@ -104,6 +173,8 @@ void HomeAssistantActivity::onExit() {
   // Stops mDNS while Wi-Fi is still up; CatalogActivity::onExit() then drops
   // Wi-Fi and may restart, so nothing after it is guaranteed to run.
   client.reset();
+  if (beacon) beacon->end();
+  beacon.reset();
   closeRouting();
   std::vector<fui::ListItem>().swap(rowItems);
   std::vector<Entry>().swap(entries);
@@ -275,6 +346,13 @@ void HomeAssistantActivity::startBrowse() {
 
 void HomeAssistantActivity::activateIndex(const int index) {
   using S = HomeAssistantClient::Status;
+  if (bleMode) {
+    if (state != State::BROWSING || !beacon || index < 0 || index >= static_cast<int>(entries.size())) return;
+    const bool sent = beacon->press(static_cast<size_t>(index), entries.size());
+    setEntryState(entries[index], sent ? "Sent" : "Failed");
+    requestUpdate();
+    return;
+  }
   if (state != State::BROWSING || !client || index < 0 || index >= static_cast<int>(entries.size())) return;
   Entry& entry = entries[index];
 

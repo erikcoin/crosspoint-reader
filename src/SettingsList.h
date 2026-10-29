@@ -124,6 +124,8 @@ inline std::vector<SettingInfo> getSettingsList(bool forPersistence = false) {
             "sleepTimeoutMinutes", StrId::STR_CAT_SYSTEM),
         SettingInfo::Toggle(StrId::STR_HA_POWER_SAVE, &CrossPointSettings::homeAssistantPowerSave,
                             "homeAssistantPowerSave", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Enum(StrId::STR_HA_LINK, &CrossPointSettings::homeAssistantLink,
+                          {StrId::STR_WIFI, StrId::STR_BLUETOOTH}, "homeAssistantLink", StrId::STR_CAT_SYSTEM),
         // Frontlight quick-panel state: persisted and web-exposed, but hidden
         // from the on-device Settings screen because the swipe panel owns it.
         SettingInfo::Value(StrId::STR_BRIGHTNESS, &CrossPointSettings::frontlightBrightness, {0, 100, 5},

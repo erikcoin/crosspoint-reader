@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "activities/CatalogActivity.h"
+#include "network/BleButtonBeacon.h"
 #include "network/HomeAssistantClient.h"
 
 /**
@@ -38,6 +39,8 @@ class HomeAssistantActivity final : public CatalogActivity {
   // so repaints reuse it. Rows point at the entries' strings and state buffers.
   std::vector<freeink::ui::ListItem> rowItems;
   std::unique_ptr<HomeAssistantClient> client;
+  std::unique_ptr<BleButtonBeacon> beacon;
+  bool bleMode = false;  // Bluetooth link: BTHome button events, no Wi-Fi
   bool sleeping = false;  // Wi-Fi is off and the sleeping screen is showing
   unsigned long lastInteractionMs = 0;
 
@@ -60,6 +63,8 @@ class HomeAssistantActivity final : public CatalogActivity {
   void setEntryState(Entry& entry, const char* text);
   void failText(const std::string& message);
   void failFor(HomeAssistantClient::Status status);
+  void startBle();
+  void loadBleEntities();
   void enterPowerSave();
   void wakeFromPowerSave();
 };
