@@ -6,6 +6,9 @@
 #include <WiFi.h>
 #include <esp_sleep.h>
 #include <soc/soc_caps.h>
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+#include <driver/rtc_io.h>
+#endif
 
 #include <cassert>
 
@@ -73,6 +76,41 @@ void HalPowerManager::setPowerSaving(bool enabled) {
   // Otherwise, no change needed
   xSemaphoreGive(modeMutex);
 }
+
+namespace {
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+// Every GPIO button on the board wakes the device, not only Power. Needs plain
+// active-low RTC-capable pins; any other board keeps the power-button wake.
+[[noreturn]] void deepSleepOnAnyButton() {
+  const auto& in = BoardConfig::ACTIVE.input;
+  uint64_t mask = 0;
+  int8_t pins[8];
+  size_t count = 0;
+  if (in.power >= 0 && !in.powerActiveHigh &&
+      BoardConfig::ACTIVE.inputStyle == BoardConfig::InputStyle::DigitalButtons) {
+    for (const int8_t pin : {in.power, in.left, in.right, in.up, in.down, in.back, in.confirm}) {
+      if (pin < 0 || !rtc_gpio_is_valid_gpio(static_cast<gpio_num_t>(pin))) continue;
+      pinMode(pin, INPUT_PULLUP);
+      mask |= 1ULL << pin;
+      pins[count++] = pin;
+    }
+  }
+  if (mask == 0) freeink::PowerManager::deepSleepUntilPowerButton();
+
+  // A still-held key would wake the device again at once; give up after 3 s so a
+  // stuck key cannot keep it awake forever.
+  const unsigned long start = millis();
+  while (millis() - start < 3000) {
+    bool held = false;
+    for (size_t i = 0; i < count; ++i) held = held || digitalRead(pins[i]) == LOW;
+    if (!held) break;
+    delay(50);
+  }
+  freeink::PowerManager::armWakeOnPins(mask, /*wakeLow=*/true);
+  freeink::PowerManager::deepSleep();
+}
+#endif
+}  // namespace
 
 void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
 #if FREEINK_DEVICE_EEGO_A4
@@ -146,9 +184,13 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   freeink::metalio::powerOff();
 #endif
 
-  // Waits for the power button to be physically released (so holding it doesn't
-  // immediately wake the device again), then arms the wake source and sleeps.
+  // Waits for the keys to be released (so holding one doesn't immediately wake
+  // the device again), then arms the wake sources and sleeps.
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+  deepSleepOnAnyButton();
+#else
   freeink::PowerManager::deepSleepUntilPowerButton();
+#endif
 }
 
 uint16_t HalPowerManager::getBatteryPercentage() const {

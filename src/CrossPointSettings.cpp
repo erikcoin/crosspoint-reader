@@ -209,22 +209,3 @@ unsigned long CrossPointSettings::getSleepTimeoutMs() const {
   return static_cast<unsigned long>(minutes) * 60UL * 1000UL;
 }
 
-int CrossPointSettings::getRefreshFrequency() const {
-  switch (refreshFrequency) {
-    case REFRESH_1:
-      return 1;
-    case REFRESH_5:
-      return 5;
-    case REFRESH_10:
-      return 10;
-    case REFRESH_15:
-    default:
-      return 15;
-    case REFRESH_30:
-      return 30;
-    case REFRESH_NEVER:
-      // Effectively disables the periodic full refresh; the page counter
-      // counts down from here and never reaches the threshold in practice.
-      return std::numeric_limits<int>::max();
-  }
-}

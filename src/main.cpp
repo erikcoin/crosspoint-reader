@@ -21,7 +21,9 @@
 #include <WiFi.h>
 #include <XteinkDetect.h>
 #include <builtinFonts/all.h>
+#include <esp_sleep.h>
 #include <esp_wifi.h>
+#include <soc/soc_caps.h>
 
 #include <cstring>
 
@@ -391,8 +393,18 @@ void setup() {
   // click-to-wake is a setting, and an X4 battery power-off cuts all power, so
   // only SD state survives to the next boot.
   // The Metalio boots after the button is released, so it skips the check.
+  // Any GPIO button can wake the device from deep sleep. Only a Power wake needs
+  // the held-button check below, so a wake by another key counts as verified.
+  bool wokeByOtherButton = false;
+#if SOC_PM_SUPPORT_EXT1_WAKEUP
+  if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1) {
+    uint64_t others = esp_sleep_get_ext1_wakeup_status();
+    if (BoardConfig::ACTIVE.input.power >= 0) others &= ~(1ULL << BoardConfig::ACTIVE.input.power);
+    wokeByOtherButton = others != 0;
+  }
+#endif
   const bool wakeHoldVerified = wakeupReason != HalGPIO::WakeupReason::PowerButton || BoardConfig::isMetalioEInk4() ||
-                                gpio.verifyPowerButtonWakeup();
+                                wokeByOtherButton || gpio.verifyPowerButtonWakeup();
 
   halTiltSensor.begin();
   halClock.begin();
@@ -616,7 +628,10 @@ void loop() {
   // Let wake continue as soon as its hold has been verified. The release can
   // arrive after setup, so consume that one input frame rather than making it
   // a page turn, refresh, or other short power-button action.
-  if (wakePowerReleasePending && !gpio.isPressed(HalGPIO::BTN_POWER)) {
+  const bool wakeKeyHeld = gpio.isPressed(HalGPIO::BTN_POWER) || gpio.isPressed(HalGPIO::BTN_UP) ||
+                           gpio.isPressed(HalGPIO::BTN_DOWN) || gpio.isPressed(HalGPIO::BTN_LEFT) ||
+                           gpio.isPressed(HalGPIO::BTN_RIGHT);
+  if (wakePowerReleasePending && !wakeKeyHeld) {
     wakePowerReleasePending = false;
     return;
   }
@@ -653,7 +668,9 @@ void loop() {
 
   // Optional shortcut: the Right front button toggles the frontlight. The press
   // is consumed so the screen underneath does not also move its selection.
-  if (SETTINGS.rightButtonLight && Frontlight.present() && gpio.wasPressed(HalGPIO::BTN_RIGHT)) {
+  // Boards like the X4 Pro wire their physical Right key as "down", leaving "right" unassigned.
+  const uint8_t rightKey = BoardConfig::ACTIVE.input.right >= 0 ? HalGPIO::BTN_RIGHT : HalGPIO::BTN_DOWN;
+  if (SETTINGS.rightButtonLight && Frontlight.present() && !wakePowerReleasePending && gpio.wasPressed(rightKey)) {
     toggleFrontlight();
     return;
   }

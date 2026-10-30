@@ -48,6 +48,12 @@ and open the screen again.
 - `src/network/HomeAssistantClient.*`: the REST calls and mDNS lookup.
 - `src/util/HomeAssistantUtil.h`: pure helpers, covered by `test/home_assistant_util`.
 
+## Waking from deep sleep
+
+On the X4 Pro the device sleeps in deep sleep and any hardware button (Power,
+Up, Down) wakes it. Touch does not wake it, because the touch controller is
+powered off in sleep to save battery.
+
 ## Bluetooth link (no Wi-Fi)
 
 Settings → System → **Home Assistant Link** chooses how the screen talks to
@@ -55,6 +61,10 @@ Home Assistant: **Wi-Fi** (above) or **Bluetooth**. Bluetooth saves battery
 because nothing connects: a tap broadcasts a short BLE message and Home
 Assistant acts on it.
 
+- The Bluetooth radio is off until you tap a row. A tap starts it, sends for
+  about 3 seconds, then shuts it down again.
+- Only the touch screen sends messages. The hardware buttons never send
+  anything.
 - It is **send-only**. The rows show "Sent", not the real On/Off state, and the
   url and token are not used. Only the first 4 `entities` are used, in order:
   row 1 is Button 1 in Home Assistant, row 2 is Button 2, and so on.

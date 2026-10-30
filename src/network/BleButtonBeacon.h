@@ -16,14 +16,21 @@ class BleButtonBeacon {
  public:
   ~BleButtonBeacon() { end(); }
 
-  // Starts the BLE stack. False when this build has no Bluetooth or it failed.
-  bool begin();
-  // Advertises "button `index` of `count` pressed" for a few seconds.
+  // True when this firmware was built with Bluetooth.
+  static constexpr bool available() { return CROSSPOINT_HA_BLE != 0; }
+
+  // Advertises "button `index` of `count` pressed" for a few seconds. The radio
+  // is started by the first press and stays off until then.
   bool press(size_t index, size_t count);
+  // Call regularly: shuts the radio down once the advertisement has finished.
+  void service();
   // Stops advertising and releases the BLE stack. Safe to call repeatedly.
   void end();
 
  private:
+  bool start();
+
   bool started = false;
   unsigned char packetId = 0;
+  unsigned long stopAtMs = 0;
 };

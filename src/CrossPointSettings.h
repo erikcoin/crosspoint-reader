@@ -86,17 +86,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
     SLEEP_TIMEOUT_COUNT
   };
 
-  // E-ink refresh frequency (pages between full refreshes).
-  enum REFRESH_FREQUENCY {
-    REFRESH_1 = 0,
-    REFRESH_5 = 1,
-    REFRESH_10 = 2,
-    REFRESH_15 = 3,
-    REFRESH_30 = 4,
-    REFRESH_NEVER = 5,
-    REFRESH_FREQUENCY_COUNT
-  };
-
   // Short power button press actions. PWR_CONFIRM is only offered on touch
   // boards (see SettingsList.h).
   enum SHORT_PWRBTN {
@@ -176,7 +165,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   // Auto-sleep timeout setting (default 10 minutes). Legacy sleepTimeout enum values are migration-only.
   uint8_t sleepTimeoutMinutes = 10;
   // E-ink refresh frequency (default 15 pages)
-  uint8_t refreshFrequency = REFRESH_15;
   // Hide battery percentage
   uint8_t hideBatteryPercentage = HIDE_NEVER;
   // UI Theme
@@ -225,7 +213,6 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static uint8_t sleepTimeoutEnumToMinutes(uint8_t legacyValue);
 
   unsigned long getSleepTimeoutMs() const;
-  int getRefreshFrequency() const;
 };
 
 // Helper macro to access settings

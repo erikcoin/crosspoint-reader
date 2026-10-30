@@ -65,6 +65,7 @@ void HomeAssistantActivity::onEnter() {
 }
 
 void HomeAssistantActivity::loop() {
+  if (beacon) beacon->service();
   if (gpio.wasAnyPressed() || gpio.wasAnyReleased() || gpio.wasTouchActivity()) lastInteractionMs = millis();
   if (!bleMode && !sleeping && state == State::BROWSING && SETTINGS.homeAssistantPowerSave &&
       millis() - lastInteractionMs >= POWER_SAVE_IDLE_MS) {
@@ -111,16 +112,15 @@ void HomeAssistantActivity::startBle() {
   beacon.reset();
   loadBleEntities();
 
+  if (!BleButtonBeacon::available()) {
+    failText("This firmware has no Bluetooth. Set Home Assistant Link to Wi-Fi");
+    return;
+  }
+  // The radio itself only starts on the first tap and stops again after the send.
   beacon = makeUniqueNoThrow<BleButtonBeacon>();
   if (!beacon) {
     LOG_ERR("HA", "OOM: beacon");
     fail(StrId::STR_MEMORY_ERROR);
-    return;
-  }
-  if (!beacon->begin()) {
-    beacon.reset();
-    failText(CROSSPOINT_HA_BLE ? "Bluetooth did not start"
-                               : "This firmware has no Bluetooth. Set Home Assistant Link to Wi-Fi");
     return;
   }
   state = State::BROWSING;
