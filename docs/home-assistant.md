@@ -29,7 +29,7 @@ and open the screen again.
 - `token`: Home Assistant → your profile → Security → **Long-lived access
   tokens** → Create token. Keep this file private; the token is stored in plain
   text.
-- `entities`: up to 8 rows, in display order. `name` is optional and defaults to
+- `entities`: up to 16 rows (7 with the Bluetooth link), in display order. `name` is optional and defaults to
   the entity id.
 
 ## How it talks to Home Assistant
@@ -77,7 +77,7 @@ Assistant acts on it.
 - Only the touch screen sends messages. The hardware buttons never send
   anything.
 - It is **send-only**. The rows show "Sent", not the real On/Off state, and the
-  url and token are not used. Only the first 4 `entities` are used, in order:
+  url and token are not used. Only the first 7 `entities` are used, in order:
   row 1 is Button 1 in Home Assistant, row 2 is Button 2, and so on.
 - The message is a BTHome v2 button event (unencrypted), so anyone in radio range
   who knows the format could send the same event. Keep that in mind before
@@ -93,8 +93,8 @@ Assistant acts on it.
    [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
    near the reader.
 2. Open the screen on the reader and tap a row once. Home Assistant should
-   offer a new **BTHome** device named "CrossPoint": accept it (no bind key).
-3. The device gets four event entities, Button 1 to Button 4. Create one
+   offer a new **BTHome** device named "Remot" (the name is short to make room for 7 buttons): accept it (no bind key).
+3. The device gets one event entity per row, Button 1 to Button 7. Create one
    automation per button, for example:
 
 ```yaml

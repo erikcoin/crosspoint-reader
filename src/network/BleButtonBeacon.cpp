@@ -10,6 +10,8 @@
 
 namespace {
 constexpr const char* DEVICE_NAME = "CrossPoint";
+// Shown by Home Assistant. Five characters is all that fits next to 7 buttons.
+constexpr const char* ADV_NAME = "Remot";
 // Home Assistant scans in duty cycles, so one advertisement can be missed. Keep
 // repeating the same packet (same packet id) and let Home Assistant drop copies.
 constexpr uint32_t ADVERTISE_MS = 3000;
@@ -35,7 +37,7 @@ bool BleButtonBeacon::press(const size_t index, const size_t count) {
 
   NimBLEAdvertisementData data;
   data.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
-  data.setName(DEVICE_NAME);
+  data.setName(ADV_NAME);
   if (!data.setServiceData(NimBLEUUID(bthome::SERVICE_UUID), payload, size)) return false;
 
   NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();

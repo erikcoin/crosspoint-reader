@@ -23,7 +23,7 @@ class HomeAssistantActivity final : public CatalogActivity {
   void loop() override;
 
  private:
-  static constexpr size_t MAX_ENTRIES = 8;
+  static constexpr size_t MAX_ENTRIES = 16;
   static constexpr size_t STATE_CAP = 16;
   // With the power-save setting on, this long without input drops Wi-Fi.
   static constexpr unsigned long POWER_SAVE_IDLE_MS = 60000;

@@ -292,7 +292,6 @@ void HomeAssistantActivity::rebuildRowItems() {
   for (const auto& entry : entries) {
     fui::ListItem item;
     item.label = entry.name.c_str();
-    item.subtitle = entry.entityId.c_str();
     item.value = entry.state;
     item.actionValue = static_cast<int16_t>(rowItems.size());
     rowItems.push_back(item);

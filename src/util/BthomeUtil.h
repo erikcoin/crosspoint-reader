@@ -20,9 +20,9 @@ constexpr uint8_t OBJ_BUTTON_EVENT = 0x3A;
 constexpr uint8_t EVENT_NONE = 0x00;
 constexpr uint8_t EVENT_PRESS = 0x01;
 
-// 31-byte advertisement minus flags (3) and a 10-character name (12), minus the
-// service-data header (4), leaves 12 bytes: device info + packet id (3) + 4 buttons.
-constexpr size_t MAX_BUTTONS = 4;
+// 31-byte advertisement = flags (3) + a 5-character name (7) + service-data
+// header (4) + device info and packet id (3) + 7 buttons (14). Exactly full.
+constexpr size_t MAX_BUTTONS = 7;
 constexpr size_t MAX_PAYLOAD = 3 + 2 * MAX_BUTTONS;
 
 // Writes the payload for "button `pressedIndex` of `buttonCount` was pressed".
