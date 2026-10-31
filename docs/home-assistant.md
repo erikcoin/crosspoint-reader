@@ -48,6 +48,17 @@ and open the screen again.
 - `src/network/HomeAssistantClient.*`: the REST calls and mDNS lookup.
 - `src/util/HomeAssistantUtil.h`: pure helpers, covered by `test/home_assistant_util`.
 
+## Sleep screen
+
+Before deep sleep the screen shows a white page with an icon and a text under
+it. Change the text in Settings → Display → **Sleep Screen Text** (default
+"Press a button to wake me up").
+
+To use another icon, for example one from [Pictogrammers MDI](https://pictogrammers.com/library/mdi/)
+(download it as a PNG, black on transparent), save it on the SD card as
+`/sleep-icon.png` (or `/sleep-icon.bmp`). It is scaled down to fit 128 px.
+Without that file the moon icon is used.
+
 ## Waking from deep sleep
 
 On the X4 Pro the device sleeps in deep sleep and any hardware button (Power,
@@ -108,3 +119,10 @@ automation:
 
 - `src/network/BleButtonBeacon.*`: the BLE sender (NimBLE, advertising only).
 - `src/util/BthomeUtil.h`: builds the message bytes; covered by `test/bthome_util`.
+
+## USB drive (SD card in Explorer)
+
+By default the USB port is a serial (COM) port. Settings → System →
+**USB Drive** switches it to a USB drive: connect the cable and the SD card
+opens as a drive in Explorer. Eject the drive or unplug the cable to go back.
+This is the way to copy `homeassistant.json` or a sleep icon to the card.

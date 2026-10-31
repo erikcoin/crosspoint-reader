@@ -26,6 +26,7 @@
 #include "activities/network/HomeAssistantActivity.h"
 #include "activities/network/WifiSelectionActivity.h"
 #include "activities/util/IntervalSelectionActivity.h"
+#include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "components/UIThemeTokens.h"
 #include "components/UiAppHelpers.h"
@@ -69,6 +70,10 @@ void SettingsActivity::rebuildSettingsLists() {
   }
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_HOME_ASSISTANT, SettingAction::HomeAssistant));
+#if FREEINK_CAP_USB_MSC
+  // Normally the USB port is a serial port only; this row exposes the SD card as a drive.
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_USB_DRIVE, SettingAction::UsbDrive));
+#endif
   // Clock configuration only exists where the RTC probe found hardware; on
   // clockless boards there is nothing to set.
   if (halClock.isAvailable()) {
@@ -351,6 +356,9 @@ void SettingsActivity::toggleCurrentSetting() {
           LOG_ERR("SETTINGS", "OOM: HomeAssistantActivity");
         }
         break;
+      case SettingAction::UsbDrive:
+        activityManager.goToUsbDrive();
+        return;
       case SettingAction::CheckForUpdates:
         startActivityForResult(std::make_unique<OtaUpdateActivity>(renderer, mappedInput), resultHandler);
         break;
@@ -383,6 +391,20 @@ void SettingsActivity::toggleCurrentSetting() {
         break;
     }
     return;  // Results will be handled in the result handler, so we can return early here
+  } else if (setting.type == SettingType::STRING && setting.stringOffset != 0) {
+    char* field = reinterpret_cast<char*>(&SETTINGS) + setting.stringOffset;
+    const size_t maxLen = setting.stringMaxLen;
+    startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, I18N.get(setting.nameId),
+                                                                   field, maxLen - 1, InputType::Text),
+                           [this, field, maxLen](const ActivityResult& result) {
+                             if (!result.isCancelled) {
+                               const std::string& text = std::get<KeyboardResult>(result.data).text;
+                               snprintf(field, maxLen, "%s", text.c_str());
+                               SETTINGS.saveToFile();
+                             }
+                             requestUpdate();
+                           });
+    return;
   } else {
     return;
   }
@@ -434,6 +456,9 @@ void SettingsActivity::openSleepTimeoutPicker() {
 
 std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
   if (setting.action == SettingAction::HomeButton) return tr(STR_CONFIGURE);
+  if (setting.type == SettingType::STRING && setting.stringOffset != 0) {
+    return reinterpret_cast<const char*>(&SETTINGS) + setting.stringOffset;
+  }
   if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
     // Guard like the valueGetter branch below: a corrupt/migrated settings
     // byte must not index past the enum table.

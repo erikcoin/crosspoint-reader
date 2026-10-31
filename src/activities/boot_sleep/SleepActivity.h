@@ -1,11 +1,10 @@
 #pragma once
-#include <string>
 
 #include "activities/Activity.h"
 
-class Bitmap;
-class HalFile;
-
+// White page with an icon and a short text, drawn once before deep sleep.
+// The text comes from the "Sleep Screen Text" setting. The icon is the built-in
+// moon, or /sleep-icon.png or /sleep-icon.bmp from the SD card when present.
 class SleepActivity final : public Activity {
  public:
   explicit SleepActivity(GfxRenderer& renderer, MappedInputManager& mappedInput, bool fromTimeout = false)
@@ -13,15 +12,8 @@ class SleepActivity final : public Activity {
   void onEnter() override;
 
  private:
-  void renderDefaultSleepScreen() const;
-  void renderCustomSleepScreen() const;
-  void renderBitmapSleepScreen(const Bitmap& bitmap, bool preserveBackground = false) const;
-  bool renderSleepOverlayFile(HalFile& file, const char* pathForLog) const;
-  bool renderTransparentOverlayPng(const std::string& path) const;
-  bool renderSleepOverlayPath(const std::string& path) const;
-  void renderLastScreenSleepScreen() const;
-  void renderTransparentCustomSleepScreen() const;
-  void renderBlankSleepScreen() const;
+  // Draws the SD card icon centered at (cx, top) and returns its height, or 0 if there is none.
+  int drawCustomIcon(int cx, int top, int maxSize) const;
 
   bool fromTimeout = false;
 };

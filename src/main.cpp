@@ -234,13 +234,6 @@ bool handleX4ProFrontlightDoubleClick() {
 
 constexpr char SLEEP_FRAME_FILE[] = "/.crosspoint/sleep_frame.bin";
 
-static void saveSleepFrameBuffer() {
-  HalFile file;
-  if (!Storage.openFileForWrite("SLP", SLEEP_FRAME_FILE, file)) return;
-  file.write(renderer.getFrameBuffer(), renderer.getBufferSize());
-  file.close();
-}
-
 static bool loadSleepFrameBuffer() {
   HalFile file;
   if (!Storage.openFileForRead("SLP", SLEEP_FRAME_FILE, file)) return false;
@@ -263,10 +256,6 @@ void enterDeepSleep(bool fromTimeout = false) {
   // floor now so a later cold boot resumes from it.
   trustedtime::note();
 
-  const bool isQuickResumeSleep =
-      SETTINGS.sleepScreen == CrossPointSettings::SLEEP_SCREEN_MODE::QUICK_RESUME ||
-      (fromTimeout &&
-       SETTINGS.quickResumeSleepScreen == CrossPointSettings::QUICK_RESUME_SLEEP_SCREEN::QUICK_RESUME_AFTER_TIMEOUT);
   // Every sleep mode leaves a complete retained frame on the e-ink panel. Keep
   // it visible until the first useful reader or home paint replaces it.
   APP_STATE.showBootScreen = false;
@@ -278,10 +267,8 @@ void enterDeepSleep(bool fromTimeout = false) {
   deepSleepInProgress = true;
   activityManager.goToSleep(fromTimeout);
 
-  if (isQuickResumeSleep) {
-    saveSleepFrameBuffer();
-  } else if (Storage.exists(SLEEP_FRAME_FILE)) {
-    // A stale Quick Resume frame must not replace the selected sleep screen during wake.
+  if (Storage.exists(SLEEP_FRAME_FILE)) {
+    // A stale frame from an older Quick Resume must not replace the sleep screen during wake.
     Storage.remove(SLEEP_FRAME_FILE);
   }
 

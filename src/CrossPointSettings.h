@@ -116,6 +116,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   };
 
   // Sleep screen settings
+  char sleepText[64] = "Press a button to wake me up";  // shown under the icon on the sleep screen
   uint8_t sleepScreen = DARK;
   // Night mode: inverted output polarity, applied to every activity per
   // render by ActivityManager. The sleep screen opts out itself.

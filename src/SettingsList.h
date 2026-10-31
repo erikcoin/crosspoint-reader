@@ -55,28 +55,10 @@ inline std::vector<StrId> homeThemeValues() {
 // STR_RESTORE_LIGHT_ON_WAKE on frontlit EEGO A4 units. The UI list still filters it.
 inline std::vector<SettingInfo> getSettingsList(bool forPersistence = false) {
   static const std::vector<SettingInfo> baseList = [] {
-    // Enum settings are persisted as numeric values. Assign these labels by enum
-    // value so a reordered menu or enum cannot silently swap their behavior.
-    std::vector<StrId> sleepScreenValues(CrossPointSettings::SLEEP_SCREEN_MODE_COUNT);
-    sleepScreenValues[CrossPointSettings::DARK] = StrId::STR_DARK;
-    sleepScreenValues[CrossPointSettings::LIGHT] = StrId::STR_LIGHT;
-    sleepScreenValues[CrossPointSettings::CUSTOM] = StrId::STR_CUSTOM;
-    sleepScreenValues[CrossPointSettings::BLANK] = StrId::STR_NONE_OPT;
-    sleepScreenValues[CrossPointSettings::QUICK_RESUME] = StrId::STR_QUICK_RESUME;
-    sleepScreenValues[CrossPointSettings::TRANSPARENT_CUSTOM] = StrId::STR_TRANSPARENT;
-
     std::vector<SettingInfo> v = {
         // --- Display ---
-        SettingInfo::Enum(StrId::STR_SLEEP_SCREEN, &CrossPointSettings::sleepScreen, std::move(sleepScreenValues),
-                          "sleepScreen", StrId::STR_CAT_DISPLAY),
-        SettingInfo::Enum(StrId::STR_SLEEP_COVER_MODE, &CrossPointSettings::sleepScreenCoverMode,
-                          {StrId::STR_FIT, StrId::STR_CROP}, "sleepScreenCoverMode", StrId::STR_CAT_DISPLAY),
-        SettingInfo::Enum(StrId::STR_SLEEP_COVER_FILTER, &CrossPointSettings::sleepScreenCoverFilter,
-                          {StrId::STR_NONE_OPT, StrId::STR_FILTER_CONTRAST, StrId::STR_INVERTED},
-                          "sleepScreenCoverFilter", StrId::STR_CAT_DISPLAY),
-        SettingInfo::Enum(StrId::STR_QUICK_RESUME_TIMEOUT, &CrossPointSettings::quickResumeSleepScreen,
-                          {StrId::STR_STATE_OFF, StrId::STR_STATE_ON}, "quickResumeSleepScreen",
-                          StrId::STR_CAT_DISPLAY),
+        SettingInfo::String(StrId::STR_SLEEP_TEXT, SETTINGS.sleepText, sizeof(SETTINGS.sleepText), "sleepText",
+                            StrId::STR_CAT_DISPLAY),
         SettingInfo::Enum(StrId::STR_HIDE_BATTERY, &CrossPointSettings::hideBatteryPercentage,
                           {StrId::STR_NEVER, StrId::STR_IN_READER, StrId::STR_ALWAYS}, "hideBatteryPercentage",
                           StrId::STR_CAT_DISPLAY),

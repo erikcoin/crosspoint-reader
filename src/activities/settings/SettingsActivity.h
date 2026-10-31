@@ -18,6 +18,7 @@ enum class SettingAction {
   ClockSettings,
   Network,
   HomeAssistant,
+  UsbDrive,
   CheckForUpdates,
   Language,
   KeyboardLayouts,
