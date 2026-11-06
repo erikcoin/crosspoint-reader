@@ -28,11 +28,11 @@ bool BleButtonBeacon::start() {
   return true;
 }
 
-bool BleButtonBeacon::press(const size_t index, const size_t count) {
+bool BleButtonBeacon::press(const size_t index, const size_t count, const uint8_t event) {
   if (!start()) return false;
 
   uint8_t payload[bthome::MAX_PAYLOAD];
-  const size_t size = bthome::buildButtonPayload(++packetId, count, index, payload, sizeof(payload));
+  const size_t size = bthome::buildButtonPayload(++packetId, count, index, payload, sizeof(payload), event);
   if (size == 0) return false;
 
   NimBLEAdvertisementData data;
@@ -71,7 +71,7 @@ void BleButtonBeacon::end() {
 #else  // no Bluetooth in this build
 
 bool BleButtonBeacon::start() { return false; }
-bool BleButtonBeacon::press(size_t, size_t) { return false; }
+bool BleButtonBeacon::press(size_t, size_t, uint8_t) { return false; }
 void BleButtonBeacon::service() {}
 void BleButtonBeacon::end() {}
 

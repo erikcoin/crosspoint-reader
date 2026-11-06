@@ -88,6 +88,21 @@ void HomeAssistantActivity::loadBleEntities() {
       if (!haUtil::isValidEntityId(entry.entityId)) continue;
       entry.name = trimmed(obj["name"] | "");
       if (entry.name.empty()) entry.name = entry.entityId;
+      entry.stayOnSubPage = obj["stay"] | true;
+      for (JsonObjectConst act : obj["actions"].as<JsonArrayConst>()) {
+        if (entry.actions.size() >= MAX_ACTIONS) break;
+        const char* eventName = act["event"] | "";
+        const uint8_t event = bthome::eventFromName(eventName);
+        if (event == bthome::EVENT_NONE) {
+          LOG_ERR("HA", "Skipping unknown event '%s'", eventName);
+          continue;
+        }
+        Action action;
+        action.event = event;
+        action.label = trimmed(act["label"] | "");
+        if (action.label.empty()) action.label = eventName;
+        entry.actions.push_back(std::move(action));
+      }
       loaded.push_back(std::move(entry));
     }
   }
@@ -102,6 +117,8 @@ void HomeAssistantActivity::loadBleEntities() {
   }
   closeRouting();
   RenderLock lock(*this);
+  subPage = -1;
+  subItems.clear();
   entries = std::move(loaded);
   rebuildRowItems();
 }
@@ -176,12 +193,17 @@ void HomeAssistantActivity::onExit() {
   if (beacon) beacon->end();
   beacon.reset();
   closeRouting();
+  std::vector<fui::ListItem>().swap(subItems);
   std::vector<fui::ListItem>().swap(rowItems);
   std::vector<Entry>().swap(entries);
   CatalogActivity::onExit();
 }
 
 void HomeAssistantActivity::onBackButton() {
+  if (subPage >= 0) {
+    closeSubPage();
+    return;
+  }
   if (auto activity = makeUniqueNoThrow<SettingsActivity>(renderer, mappedInput)) {
     startActivityForResult(std::move(activity), nullptr);
   } else {
@@ -298,6 +320,34 @@ void HomeAssistantActivity::rebuildRowItems() {
   }
 }
 
+void HomeAssistantActivity::openSubPage(const int index) {
+  Entry& entry = entries[index];
+  closeRouting();  // the touch table still points at the main list's rows
+  RenderLock lock(*this);
+  subItems.clear();
+  subItems.reserve(entry.actions.size());
+  for (auto& action : entry.actions) {
+    action.state[0] = '\0';
+    fui::ListItem item;
+    item.label = action.label.c_str();
+    item.value = action.state;
+    item.actionValue = static_cast<int16_t>(subItems.size());
+    subItems.push_back(item);
+  }
+  subPage = index;
+  nav.reset();
+  requestUpdate();
+}
+
+void HomeAssistantActivity::closeSubPage() {
+  closeRouting();
+  RenderLock lock(*this);
+  subPage = -1;
+  subItems.clear();
+  nav.reset();
+  requestUpdate();
+}
+
 void HomeAssistantActivity::setEntryState(Entry& entry, const char* text) {
   // The render task reads this buffer through the row's value pointer.
   RenderLock lock(*this);
@@ -346,7 +396,26 @@ void HomeAssistantActivity::startBrowse() {
 void HomeAssistantActivity::activateIndex(const int index) {
   using S = HomeAssistantClient::Status;
   if (bleMode) {
-    if (state != State::BROWSING || !beacon || index < 0 || index >= static_cast<int>(entries.size())) return;
+    if (state != State::BROWSING || !beacon || index < 0 || index >= listCount()) return;
+    if (subPage >= 0) {
+      Entry& parent = entries[subPage];
+      Action& action = parent.actions[index];
+      const bool sent = beacon->press(static_cast<size_t>(subPage), entries.size(), action.event);
+      {
+        RenderLock lock(*this);
+        std::snprintf(action.state, sizeof(action.state), "%s", sent ? "Sent" : "Failed");
+      }
+      if (sent && !parent.stayOnSubPage) {
+        closeSubPage();
+        return;
+      }
+      requestUpdate();
+      return;
+    }
+    if (!entries[index].actions.empty()) {
+      openSubPage(index);
+      return;
+    }
     const bool sent = beacon->press(static_cast<size_t>(index), entries.size());
     setEntryState(entries[index], sent ? "Sent" : "Failed");
     requestUpdate();
@@ -382,8 +451,19 @@ void HomeAssistantActivity::buildScreen(UiScreen& screen) {
     screen.centeredText(tr(STR_TOUCH_TO_WAKE), screen.theme().bodyText);
     return;
   }
-  screenHeader(screen, tr(STR_HOME_ASSISTANT));
+  screenHeader(screen, subPage >= 0 ? entries[subPage].name.c_str() : tr(STR_HOME_ASSISTANT));
   if (buildStatusScreen(screen)) return;
+
+  if (subPage >= 0) {
+    fui::ListProps sub;
+    sub.items = subItems.data();
+    sub.count = static_cast<uint16_t>(subItems.size());
+    sub.action = ACTION_ROW;
+    sub.inputMask = fui::InputTouch;
+    syncListViewport(screen, sub);
+    screen.list(sub);
+    return;
+  }
 
   if (rowItems.empty()) {
     screen.centeredText(tr(STR_NO_ENTRIES), screen.theme().bodyText);

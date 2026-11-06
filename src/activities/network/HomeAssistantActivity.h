@@ -28,23 +28,38 @@ class HomeAssistantActivity final : public CatalogActivity {
   // With the power-save setting on, this long without input drops Wi-Fi.
   static constexpr unsigned long POWER_SAVE_IDLE_MS = 60000;
 
+  // Bluetooth sub-page button: sends another event type for the same Button N.
+  struct Action {
+    std::string label;
+    uint8_t event = 0;
+    char state[STATE_CAP] = {};
+  };
+  static constexpr size_t MAX_ACTIONS = 4;
+
   struct Entry {
     std::string name;
     std::string entityId;
     char state[STATE_CAP] = {};
+    std::vector<Action> actions;  // empty: a tap sends a plain press
+    bool stayOnSubPage = true;    // after an action: stay on the sub-page or go back
   };
 
   std::vector<Entry> entries;
   // Row buffer derived from `entries`, rebuilt only when the list is reloaded
   // so repaints reuse it. Rows point at the entries' strings and state buffers.
   std::vector<freeink::ui::ListItem> rowItems;
+  int subPage = -1;  // entry whose actions are showing, or -1 for the main list
+  std::vector<freeink::ui::ListItem> subItems;
   std::unique_ptr<HomeAssistantClient> client;
   std::unique_ptr<BleButtonBeacon> beacon;
   bool bleMode = false;  // Bluetooth link: BTHome button events, no Wi-Fi
   bool sleeping = false;  // Wi-Fi is off and the sleeping screen is showing
   unsigned long lastInteractionMs = 0;
 
-  int listCount() const override { return state == State::BROWSING ? static_cast<int>(entries.size()) : 0; }
+  int listCount() const override {
+    if (state != State::BROWSING) return 0;
+    return subPage >= 0 ? static_cast<int>(entries[subPage].actions.size()) : static_cast<int>(entries.size());
+  }
   bool hasSearch() const override { return false; }
   void performSearch(const std::string&) override {}
   void downloadFinished(bool) override {}
@@ -65,6 +80,8 @@ class HomeAssistantActivity final : public CatalogActivity {
   void failFor(HomeAssistantClient::Status status);
   void startBle();
   void loadBleEntities();
+  void openSubPage(int index);
+  void closeSubPage();
   void enterPowerSave();
   void wakeFromPowerSave();
 };

@@ -87,6 +87,31 @@ Assistant acts on it.
   ESP32-S3 env, add the same flag and `h2zero/NimBLE-Arduino@^2.3.8` to its
   `lib_deps`. Builds without it show an error and need the Wi-Fi link.
 
+### Sub-pages with more events (Bluetooth only)
+
+A row with `actions` opens a sub-page instead of sending right away. Each action
+sends the same Button N with another event type, so one button can drive up to
+4 automations:
+
+```json
+{ "name": "Bibliotheeklamp", "entity_id": "light.bibliotheeklamp",
+  "stay": true,
+  "actions": [
+    { "label": "Aan/uit", "event": "press" },
+    { "label": "Dimmen", "event": "long_press" },
+    { "label": "Scene", "event": "double_press" }
+  ] }
+```
+
+- `event` is one of `press`, `double_press`, `triple_press`, `long_press`,
+  `long_double_press`, `long_triple_press`. Unknown names are skipped.
+- `label` is the text on the sub-page row (defaults to the event name).
+- `stay` (default `true`): stay on the sub-page after an action, or go back to
+  the list when `false`. Back always returns to the list.
+- Rows without `actions` send a plain `press` as before.
+- In Home Assistant, trigger on the Button N event entity with the matching
+  event type. A new event type may need a first send before it shows up.
+
 ### Home Assistant setup
 
 1. Home Assistant needs a Bluetooth adapter, or an
